@@ -1,0 +1,14 @@
+.DS_Store
+
+# Java / Maven
+target/
+*.class
+
+# Python local environments
+.venv/
+__pycache__/
+*.pyc
+
+# IDEs
+.idea/
+.vscode/
