@@ -58,3 +58,17 @@ This is intentional for the tutorial:
 - It lets us learn the repository responsibility before adding a database.
 - It keeps the first REST API simple.
 - It creates a seam where we can later replace memory storage with H2/JPA.
+
+## Service Layer
+
+`TaskService` contains task business workflows.
+
+Current responsibilities:
+
+- List tasks
+- Get one task by id
+- Create a task with default status and priority
+- Mark a task as completed
+- Delete a task
+
+The service depends on `TaskRepository`, but controllers and future MCP tools should depend on the service instead of directly modifying storage.
