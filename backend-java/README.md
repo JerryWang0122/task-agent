@@ -46,3 +46,15 @@ Initial fields:
 - `updatedAt`: when the task was last changed
 
 At this stage `Task` is a plain Java object, not a database entity yet. Persistence will be added later so we can first focus on the domain language.
+
+## Repository Layer
+
+`TaskRepository` is the data access boundary for tasks.
+
+For now it uses an in-memory `Map`, which means data disappears when the application stops.
+
+This is intentional for the tutorial:
+
+- It lets us learn the repository responsibility before adding a database.
+- It keeps the first REST API simple.
+- It creates a seam where we can later replace memory storage with H2/JPA.
