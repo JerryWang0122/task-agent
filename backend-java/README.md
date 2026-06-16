@@ -29,3 +29,20 @@ mvn test
 ```
 
 At this stage the app only starts. Task APIs will be added in the next phase.
+
+## Task Domain Model
+
+The first business concept in this backend is `Task`.
+
+Initial fields:
+
+- `id`: unique task identifier
+- `title`: short task name
+- `description`: optional task details
+- `status`: current task state, represented by `TaskStatus`
+- `priority`: task importance, represented by `TaskPriority`
+- `dueDate`: optional deadline
+- `createdAt`: when the task was created
+- `updatedAt`: when the task was last changed
+
+At this stage `Task` is a plain Java object, not a database entity yet. Persistence will be added later so we can first focus on the domain language.
