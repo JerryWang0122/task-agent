@@ -72,3 +72,24 @@ Current responsibilities:
 - Delete a task
 
 The service depends on `TaskRepository`, but controllers and future MCP tools should depend on the service instead of directly modifying storage.
+
+## REST API Layer
+
+`TaskController` exposes task capabilities over HTTP.
+
+Current endpoints:
+
+```text
+GET    /api/tasks
+GET    /api/tasks/{id}
+POST   /api/tasks
+PATCH  /api/tasks/{id}/complete
+DELETE /api/tasks/{id}
+```
+
+DTOs define the API contract:
+
+- `CreateTaskRequest`: JSON shape accepted when creating a task
+- `TaskResponse`: JSON shape returned to API clients
+
+The controller maps HTTP requests to service calls. It should not contain core business rules.
