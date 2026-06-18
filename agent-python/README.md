@@ -54,6 +54,7 @@ python main.py
 Available local commands:
 
 - `tools`: start the MCP Server and list available MCP tools
+- `tasks`: call the MCP `list_tasks` tool and show tasks from the Java backend
 - `exit`: quit the Agent CLI
 
-For this step, the Agent can inspect MCP tools but does not yet decide which tool to call for natural-language requests.
+For this step, the Agent can inspect MCP tools and call the read-only `list_tasks` tool. It does not yet decide which tool to call for natural-language requests.

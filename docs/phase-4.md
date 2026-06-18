@@ -104,3 +104,44 @@ The Agent started the MCP Server over stdio.
 The Agent called list_tools().
 The response included health_check, list_tasks, get_task, create_task, and complete_task.
 ```
+
+## First MCP Tool Execution
+
+The Agent now has a `tasks` command.
+
+When the user types:
+
+```text
+tasks
+```
+
+the Agent:
+
+- starts `mcp-server/main.py` as a subprocess
+- creates an MCP `ClientSession`
+- calls `call_tool("list_tasks", arguments={})`
+- receives task data from the MCP Server
+- formats the returned JSON into a readable task list
+
+This proves the Agent can execute a read-only MCP tool.
+
+The full runtime path is:
+
+```text
+User
+  -> Python Agent tasks command
+  -> MCP Client call_tool("list_tasks")
+  -> MCP Server list_tasks tool
+  -> Java GET /api/tasks
+  -> H2 database
+```
+
+Why this matters:
+
+```text
+Tool discovery tells the Agent what it can do.
+Tool execution lets the Agent actually use backend capabilities.
+```
+
+For now, the command is explicit.
+Later, natural-language input such as "show my tasks" can map to this same tool call.
