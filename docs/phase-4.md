@@ -216,3 +216,45 @@ User says "show task 1"
 
 For now, argument extraction is rule-based with a small regular expression.
 Later, an LLM can produce the same structured argument from natural language.
+
+## First Confirmation Flow For A Write Tool
+
+The Agent now recognizes task completion requests, such as:
+
+```text
+complete task 1
+mark task 1 done
+finish task 1
+```
+
+Unlike `list_tasks` and `get_task`, `complete_task` changes backend data.
+The Agent therefore does not call the tool immediately.
+
+Instead, it stores a pending action:
+
+```text
+pending_action = {"task_id": 1}
+```
+
+Then it asks the user to confirm:
+
+```text
+Confirm: mark task #1 as completed? Type 'yes' or 'no'.
+```
+
+Only after the user answers `yes` does the Agent call:
+
+```text
+call_tool("complete_task", arguments={"task_id": 1})
+```
+
+If the user answers `no`, the Agent clears the pending action and does not call the tool.
+
+This is the first safety boundary in the Agent:
+
+```text
+Read-only tools can run directly.
+Write tools require explicit confirmation.
+```
+
+Enterprise Agent systems need this pattern because tool calls can modify real business data.

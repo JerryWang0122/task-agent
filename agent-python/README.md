@@ -73,4 +73,13 @@ show task 1
 #1
 ```
 
+Write operations require confirmation. To complete a task:
+
+```text
+complete task 1
+yes
+```
+
+Answer `no` to cancel without changing data.
+
 For this step, routing is rule-based. Later, an LLM can replace this rule and choose tools from MCP metadata.

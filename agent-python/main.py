@@ -97,6 +97,28 @@ async def get_task(task_id: int) -> str:
             )
 
 
+async def complete_task(task_id: int) -> str:
+    """Call the MCP complete_task tool after the user confirms the action."""
+    server_python = os.getenv("MCP_SERVER_PYTHON", sys.executable)
+    server_parameters = StdioServerParameters(
+        command=server_python,
+        args=["main.py"],
+        cwd=MCP_SERVER_DIR,
+    )
+
+    async with stdio_client(server_parameters) as (read_stream, write_stream):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+            result = await session.call_tool("complete_task", arguments={"task_id": task_id})
+
+            structured_content = result.structuredContent or {}
+            task = structured_content.get("result")
+            if task is None:
+                task = json.loads(result.content[0].text)
+
+            return f"Completed task #{task['id']}: {task['title']}"
+
+
 def extract_task_id(user_message: str) -> int | None:
     """Extract a task id from simple phrases like 'task 1' or '#1'."""
     match = re.search(r"(?:task\s*#?|#)(\d+)", user_message.lower())
@@ -104,6 +126,16 @@ def extract_task_id(user_message: str) -> int | None:
         return None
 
     return int(match.group(1))
+
+
+def should_complete_task(user_message: str) -> bool:
+    """Return True when the user is asking to mark a task complete."""
+    normalized_message = user_message.lower()
+    complete_words = {"complete", "completed", "finish", "finished", "done"}
+
+    return extract_task_id(normalized_message) is not None and any(
+        word in normalized_message for word in complete_words
+    )
 
 
 def should_list_tasks(user_message: str) -> bool:
@@ -129,23 +161,46 @@ def answer(user_message: str) -> str:
 def main() -> None:
     print("Personal Task Agent")
     print("Type a task question, 'tools', 'tasks', or 'exit' to quit.")
+    pending_action: dict[str, int] | None = None
 
     while True:
         user_message = input("> ").strip()
+        normalized_message = user_message.lower()
 
-        if user_message.lower() in {"exit", "quit"}:
+        if normalized_message in {"exit", "quit"}:
             print("Goodbye.")
             return
 
         if not user_message:
             continue
 
-        if user_message.lower() == "tools":
+        if pending_action is not None:
+            if normalized_message in {"yes", "y", "confirm"}:
+                task_id = pending_action["task_id"]
+                pending_action = None
+                print(asyncio.run(complete_task(task_id)))
+                continue
+
+            if normalized_message in {"no", "n", "cancel"}:
+                pending_action = None
+                print("Cancelled. No task was changed.")
+                continue
+
+            print("Please answer 'yes' to confirm or 'no' to cancel.")
+            continue
+
+        if normalized_message == "tools":
             print(asyncio.run(list_mcp_tools()))
             continue
 
-        if user_message.lower() == "tasks":
+        if normalized_message == "tasks":
             print(asyncio.run(list_tasks()))
+            continue
+
+        if should_complete_task(user_message):
+            task_id = extract_task_id(user_message)
+            pending_action = {"task_id": task_id}
+            print(f"Confirm: mark task #{task_id} as completed? Type 'yes' or 'no'.")
             continue
 
         task_id = extract_task_id(user_message)
