@@ -59,3 +59,48 @@ Before adding LLMs or LangGraph-style workflows, we want to understand:
 - where final response generation belongs
 
 This prevents the Agent from becoming a large black box too early.
+
+## First MCP Client Connection
+
+The Agent now has a `tools` command.
+
+When the user types:
+
+```text
+tools
+```
+
+the Agent:
+
+- starts `mcp-server/main.py` as a subprocess
+- creates an MCP `ClientSession`
+- calls `list_tools()`
+- prints tool names and descriptions
+
+This proves the Agent can discover tools through MCP metadata.
+
+It still does not use an LLM yet.
+
+Why this matters:
+
+```text
+Before an Agent can choose tools, it must be able to discover what tools exist.
+```
+
+Python executable note:
+
+```text
+The Agent uses MCP_SERVER_PYTHON when set.
+Otherwise, it uses the same Python executable that started the Agent.
+```
+
+This matters when the Agent and MCP Server have separate virtual environments.
+
+Verified result:
+
+```text
+The Agent CLI accepted the tools command.
+The Agent started the MCP Server over stdio.
+The Agent called list_tools().
+The response included health_check, list_tasks, get_task, create_task, and complete_task.
+```

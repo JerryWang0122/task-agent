@@ -39,10 +39,21 @@ Install the project:
 python -m pip install -e .
 ```
 
+The Agent starts the MCP Server as a subprocess. If the MCP Server dependencies are installed in a different virtual environment, point the Agent at that Python executable:
+
+```bash
+export MCP_SERVER_PYTHON=../mcp-server/.venv/bin/python
+```
+
 ## Run
 
 ```bash
 python main.py
 ```
 
-For this first skeleton step, the Agent only echoes that it received your message. MCP client integration will be added next.
+Available local commands:
+
+- `tools`: start the MCP Server and list available MCP tools
+- `exit`: quit the Agent CLI
+
+For this step, the Agent can inspect MCP tools but does not yet decide which tool to call for natural-language requests.

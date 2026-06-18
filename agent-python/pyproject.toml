@@ -3,7 +3,9 @@ name = "task-agent-python"
 version = "0.1.0"
 description = "Python Agent orchestration layer for the Personal Task Management Agent tutorial"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "mcp>=1.0.0",
+]
 
 [project.optional-dependencies]
 dev = []
