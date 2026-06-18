@@ -59,6 +59,7 @@ The server exposes these tools:
 - `list_tasks`: calls `GET /api/tasks` on the Java backend
 - `get_task`: calls `GET /api/tasks/{id}` on the Java backend
 - `create_task`: calls `POST /api/tasks` on the Java backend
+- `complete_task`: calls `PATCH /api/tasks/{id}/complete` on the Java backend
 
 By default, the MCP Server calls:
 
@@ -108,11 +109,14 @@ Available tools:
   Name: list_tasks
   Name: get_task
   Name: create_task
+  Name: complete_task
 list_tasks result:
 ...
 get_task result:
 ...
 create_task result:
+...
+complete_task result:
 ...
 ```
 
@@ -122,4 +126,4 @@ The task data should match the response from:
 curl http://localhost:8080/api/tasks
 ```
 
-`create_task` changes backend data. In this tutorial phase, the manual test calls it directly so we can verify the tool. Later, the Agent workflow will add confirmation before write operations.
+`create_task` and `complete_task` change backend data. In this tutorial phase, the manual test calls them directly so we can verify the tools. Later, the Agent workflow will add confirmation before write operations.

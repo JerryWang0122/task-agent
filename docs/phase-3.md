@@ -285,3 +285,61 @@ The MCP client called create_task with title, description, priority, and due_dat
 The tool called POST http://localhost:8080/api/tasks successfully.
 The Java backend returned HTTP 201 and created task id 5.
 ```
+
+## Fourth Tool: complete_task
+
+`complete_task` marks one task as done through the Java backend.
+
+Purpose:
+
+```text
+Allow the Agent to complete a task after the user confirms the target task.
+```
+
+Backend API it calls:
+
+```text
+PATCH /api/tasks/{id}/complete
+```
+
+Tool input:
+
+```text
+task_id: integer
+```
+
+Data flow:
+
+```text
+Agent
+  -> complete_task MCP tool with task_id
+  -> Java REST API PATCH /api/tasks/{id}/complete
+  -> TaskService sets status to DONE
+  -> TaskJpaRepository saves to H2
+```
+
+Safety note:
+
+```text
+complete_task is a write operation.
+The manual test calls it directly, but the future Agent workflow should ask for confirmation first.
+```
+
+Manual test design:
+
+```text
+manual_test.py first creates a temporary task.
+Then it calls complete_task on the newly created task id.
+This avoids changing the seeded sample tasks.
+```
+
+Verified result:
+
+```text
+The MCP client listed complete_task as an available tool.
+The generated input schema required task_id as an integer.
+manual_test.py created task id 5.
+The MCP client called complete_task with task_id = 5.
+The tool called PATCH http://localhost:8080/api/tasks/5/complete successfully.
+The Java backend returned the task with status DONE.
+```

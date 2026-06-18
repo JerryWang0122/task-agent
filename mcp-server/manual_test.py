@@ -62,6 +62,19 @@ async def main() -> None:
                 else:
                     print(json.dumps(content.model_dump(), indent=2))
 
+            created_task = json.loads(create_result.content[0].text)
+            complete_result = await session.call_tool(
+                "complete_task",
+                arguments={"task_id": created_task["id"]},
+            )
+            print("complete_task result:")
+
+            for content in complete_result.content:
+                if hasattr(content, "text"):
+                    print(content.text)
+                else:
+                    print(json.dumps(content.model_dump(), indent=2))
+
 
 if __name__ == "__main__":
     asyncio.run(main())

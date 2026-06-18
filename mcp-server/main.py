@@ -53,5 +53,13 @@ def create_task(
     return response.json()
 
 
+@mcp.tool()
+def complete_task(task_id: int) -> dict[str, Any]:
+    """Mark one task as completed by calling the Java backend Task REST API."""
+    response = httpx.patch(f"{TASK_API_BASE_URL}/api/tasks/{task_id}/complete", timeout=10.0)
+    response.raise_for_status()
+    return response.json()
+
+
 if __name__ == "__main__":
     mcp.run()
