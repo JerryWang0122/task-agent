@@ -1,5 +1,11 @@
+import os
+from typing import Any
+
+import httpx
 from mcp.server.fastmcp import FastMCP
 
+
+TASK_API_BASE_URL = os.getenv("TASK_API_BASE_URL", "http://localhost:8080")
 
 mcp = FastMCP("task-agent-mcp-server")
 
@@ -8,6 +14,14 @@ mcp = FastMCP("task-agent-mcp-server")
 def health_check() -> str:
     """Return a simple message confirming the MCP server is running."""
     return "Task MCP server is running."
+
+
+@mcp.tool()
+def list_tasks() -> list[dict[str, Any]]:
+    """List tasks by calling the Java backend Task REST API."""
+    response = httpx.get(f"{TASK_API_BASE_URL}/api/tasks", timeout=10.0)
+    response.raise_for_status()
+    return response.json()
 
 
 if __name__ == "__main__":

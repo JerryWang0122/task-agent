@@ -52,3 +52,49 @@ The key architectural rule remains the same in either language:
 MCP Server calls the Java REST API.
 The Java backend owns task business logic and persistence.
 ```
+
+## First Tool: list_tasks
+
+`list_tasks` is the first real MCP tool in this project.
+
+Purpose:
+
+```text
+Return the current task list to the Agent.
+```
+
+Backend API it calls:
+
+```text
+GET /api/tasks
+```
+
+Default backend base URL:
+
+```text
+http://localhost:8080
+```
+
+Environment variable override:
+
+```text
+TASK_API_BASE_URL
+```
+
+Data flow:
+
+```text
+Agent
+  -> list_tasks MCP tool
+  -> Java REST API GET /api/tasks
+  -> TaskService
+  -> TaskJpaRepository
+  -> H2 database
+```
+
+Important design point:
+
+```text
+The MCP tool does not query the database directly.
+It only calls the Java API and returns that API result.
+```
