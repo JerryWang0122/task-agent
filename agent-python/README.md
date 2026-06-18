@@ -62,7 +62,7 @@ Available local commands:
 
 - `tools`: start the MCP Server and list available MCP tools
 - `tasks`: call the MCP `list_tasks` tool and show tasks from the Java backend
-- `ask-llm <message>`: ask OpenAI for a structured Agent decision without executing tools
+- `ask-llm <message>`: ask OpenAI for a structured Agent decision and execute safe read-only tools
 - `exit`: quit the Agent CLI
 
 The Agent also recognizes simple natural-language task listing requests, such as:
@@ -99,4 +99,4 @@ Answer `no` to cancel without changing data.
 
 For this step, routing is rule-based. Later, an LLM can replace this rule and choose tools from MCP metadata.
 
-The `ask-llm` command is the first LLM step. It returns a JSON decision, but the Agent does not execute that decision yet.
+The `ask-llm` command returns a JSON decision. The Agent can execute read-only decisions such as `list_tasks` and `get_task`. Write tools still require a separate confirmation flow.

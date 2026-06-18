@@ -63,4 +63,84 @@ If `OPENAI_API_KEY` is missing, the Agent prints a clear setup message instead o
 
 Temporary rule-based commands still exist so the Agent remains usable while the LLM layer is introduced.
 
-The next step is to let the Agent take the LLM decision and execute read-only tools such as `list_tasks` and `get_task`.
+## Step 5.2: Execute Read-Only LLM Decisions
+
+The Agent now parses the LLM decision JSON and passes it through an execution policy.
+
+Supported read-only decisions:
+
+```json
+{
+  "action": "call_tool",
+  "tool_name": "list_tasks",
+  "arguments": {},
+  "requires_confirmation": false,
+  "response": null
+}
+```
+
+```json
+{
+  "action": "call_tool",
+  "tool_name": "get_task",
+  "arguments": {
+    "task_id": 1
+  },
+  "requires_confirmation": false,
+  "response": null
+}
+```
+
+For these tools, the Agent executes the MCP call and returns the result.
+
+Write tools are intentionally blocked for now:
+
+```text
+LLM suggested write tool complete_task. Confirmation flow will be added next.
+```
+
+Why this matters:
+
+```text
+The LLM can propose an action.
+The Agent policy decides whether that action is allowed now.
+```
+
+This is the first step where natural language can flow through the LLM into MCP tool execution.
+
+## LLM Output Normalization
+
+LLM output should be treated as untrusted structured data.
+
+For example, the prompt asks for:
+
+```json
+{
+  "action": "call_tool",
+  "tool_name": "get_task"
+}
+```
+
+But a model may return:
+
+```json
+{
+  "action": "get_task",
+  "tool_name": "get_task"
+}
+```
+
+The Agent runtime now normalizes known tool names in the `action` field back to:
+
+```json
+{
+  "action": "call_tool",
+  "tool_name": "get_task"
+}
+```
+
+This teaches an important production rule:
+
+```text
+Prompting helps, but runtime validation and normalization are still required.
+```

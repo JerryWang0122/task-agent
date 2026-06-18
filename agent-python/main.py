@@ -15,10 +15,16 @@ MCP_SERVER_DIR = PROJECT_ROOT / "mcp-server"
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
 
 
-def decide_with_llm(user_message: str) -> str:
+def decide_with_llm(user_message: str) -> dict[str, object]:
     """Ask OpenAI for a structured decision without executing any tool."""
     if not os.getenv("OPENAI_API_KEY"):
-        return "OPENAI_API_KEY is not set. Export it before using ask-llm."
+        return {
+            "action": "respond",
+            "tool_name": None,
+            "arguments": {},
+            "requires_confirmation": False,
+            "response": "OPENAI_API_KEY is not set. Export it before using ask-llm.",
+        }
 
     client = OpenAI()
     response = client.chat.completions.create(
@@ -30,10 +36,13 @@ def decide_with_llm(user_message: str) -> str:
                 "content": (
                     "You are the decision layer for a personal task Agent. "
                     "Return only JSON. Do not execute tools. "
-                    "Use this shape: "
-                    '{"action":"respond|call_tool", "tool_name":null, '
+                    "The action field must be exactly one of these two strings: "
+                    "respond or call_tool. Never put a tool name in the action field. "
+                    "Use this JSON shape: "
+                    '{"action":"call_tool", "tool_name":"list_tasks", '
                     '"arguments":{}, "requires_confirmation":false, "response":null}. '
                     "Available tools are list_tasks, get_task, create_task, and complete_task. "
+                    "When calling a tool, set action to call_tool and put the tool name in tool_name. "
                     "Set requires_confirmation to true for create_task and complete_task."
                 ),
             },
@@ -41,7 +50,59 @@ def decide_with_llm(user_message: str) -> str:
         ],
     )
 
-    return response.choices[0].message.content or "{}"
+    content = response.choices[0].message.content or "{}"
+    return normalize_llm_decision(json.loads(content))
+
+
+def normalize_llm_decision(decision: dict[str, object]) -> dict[str, object]:
+    """Normalize common LLM decision shape mistakes before policy execution."""
+    known_tools = {"list_tasks", "get_task", "create_task", "complete_task"}
+    action = decision.get("action")
+
+    if action in known_tools:
+        decision["tool_name"] = decision.get("tool_name") or action
+        decision["action"] = "call_tool"
+
+    decision.setdefault("arguments", {})
+    decision.setdefault("requires_confirmation", decision.get("tool_name") in {"create_task", "complete_task"})
+    decision.setdefault("response", None)
+
+    return decision
+
+
+def format_decision(decision: dict[str, object]) -> str:
+    """Return a readable JSON representation of an LLM decision."""
+    return json.dumps(decision, indent=2)
+
+
+async def execute_llm_decision(decision: dict[str, object]) -> str:
+    """Execute safe LLM decisions while blocking write tools for now."""
+    action = decision.get("action")
+    if action == "respond":
+        return str(decision.get("response") or "I do not have a response.")
+
+    if action != "call_tool":
+        return f"Unsupported LLM action: {action}"
+
+    tool_name = decision.get("tool_name")
+    arguments = decision.get("arguments") or {}
+    if not isinstance(arguments, dict):
+        return "Invalid LLM decision: arguments must be an object."
+
+    if tool_name == "list_tasks":
+        return await list_tasks()
+
+    if tool_name == "get_task":
+        task_id = arguments.get("task_id")
+        if task_id is None:
+            return "Invalid LLM decision: get_task requires task_id."
+
+        return await get_task(int(task_id))
+
+    if tool_name in {"create_task", "complete_task"}:
+        return f"LLM suggested write tool {tool_name}. Confirmation flow will be added next."
+
+    return f"Unsupported LLM tool: {tool_name}"
 
 
 async def list_mcp_tools() -> str:
@@ -278,7 +339,11 @@ def main() -> None:
                 print("Please provide a message after ask-llm.")
                 continue
 
-            print(decide_with_llm(llm_message))
+            decision = decide_with_llm(llm_message)
+            print("LLM decision:")
+            print(format_decision(decision))
+            print("Agent result:")
+            print(asyncio.run(execute_llm_decision(decision)))
             continue
 
         if normalized_message == "tasks":
