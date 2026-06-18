@@ -61,6 +61,19 @@ Current repository responsibilities:
 - Delete tasks
 - Delegate SQL generation to Spring Data JPA and Hibernate
 
+## Sample Data
+
+`TaskDataSeeder` creates sample tasks when the application starts and the task table is empty.
+
+The sample data includes:
+
+- A task due today
+- A future task
+- An overdue task
+- A completed task
+
+This gives the future MCP Server and Python Agent realistic data to query.
+
 ## Service Layer
 
 `TaskService` contains task business workflows.
