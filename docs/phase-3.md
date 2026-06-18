@@ -204,3 +204,84 @@ The generated input schema required task_id as an integer.
 The MCP client called get_task with task_id = 1.
 The tool called GET http://localhost:8080/api/tasks/1 successfully.
 ```
+
+## Third Tool: create_task
+
+`create_task` creates a new task through the Java backend.
+
+Purpose:
+
+```text
+Allow the Agent to create a task after it has enough user-provided task details.
+```
+
+Backend API it calls:
+
+```text
+POST /api/tasks
+```
+
+Tool inputs:
+
+```text
+title: string, required
+description: string, optional
+priority: LOW, MEDIUM, HIGH, or URGENT, optional
+due_date: string, optional ISO date such as 2026-06-21
+```
+
+Priority schema:
+
+```python
+TaskPriority = Literal["LOW", "MEDIUM", "HIGH", "URGENT"]
+```
+
+This helps the Agent understand valid priority values from MCP tool metadata.
+
+It is not a replacement for backend validation. The Java API should still reject invalid values because other clients can call the REST API directly.
+
+Request body sent to Java:
+
+```json
+{
+  "title": "...",
+  "description": "...",
+  "priority": "LOW",
+  "dueDate": "2026-06-21"
+}
+```
+
+Important boundary:
+
+```text
+The MCP Server does not assign status, createdAt, or updatedAt.
+TaskService in the Java backend owns those business defaults.
+```
+
+Safety note:
+
+```text
+create_task is a write operation.
+The tutorial tests it directly in Phase 3, but the Agent workflow should require confirmation before using it automatically.
+```
+
+Data flow:
+
+```text
+Agent
+  -> create_task MCP tool
+  -> Java REST API POST /api/tasks
+  -> TaskService applies defaults
+  -> TaskJpaRepository saves to H2
+```
+
+Verified result:
+
+```text
+The MCP client listed create_task as an available tool.
+The generated input schema required title.
+The generated input schema constrained priority to LOW, MEDIUM, HIGH, or URGENT.
+The MCP client called create_task with title, description, priority, and due_date.
+The tool called POST http://localhost:8080/api/tasks successfully.
+The Java backend returned HTTP 201 and created task id 5.
+```

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import sys
+from datetime import date
 from pathlib import Path
 
 from mcp import ClientSession
@@ -39,6 +40,23 @@ async def main() -> None:
             print("get_task result:")
 
             for content in get_result.content:
+                if hasattr(content, "text"):
+                    print(content.text)
+                else:
+                    print(json.dumps(content.model_dump(), indent=2))
+
+            create_result = await session.call_tool(
+                "create_task",
+                arguments={
+                    "title": "Created from MCP manual test",
+                    "description": "Created by manual_test.py through the MCP create_task tool.",
+                    "priority": "LOW",
+                    "due_date": date.today().isoformat(),
+                },
+            )
+            print("create_task result:")
+
+            for content in create_result.content:
                 if hasattr(content, "text"):
                     print(content.text)
                 else:

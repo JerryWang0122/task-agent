@@ -1,11 +1,12 @@
 import os
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 from mcp.server.fastmcp import FastMCP
 
 
 TASK_API_BASE_URL = os.getenv("TASK_API_BASE_URL", "http://localhost:8080")
+TaskPriority = Literal["LOW", "MEDIUM", "HIGH", "URGENT"]
 
 mcp = FastMCP("task-agent-mcp-server")
 
@@ -28,6 +29,26 @@ def list_tasks() -> list[dict[str, Any]]:
 def get_task(task_id: int) -> dict[str, Any]:
     """Get one task by id from the Java backend Task REST API."""
     response = httpx.get(f"{TASK_API_BASE_URL}/api/tasks/{task_id}", timeout=10.0)
+    response.raise_for_status()
+    return response.json()
+
+
+@mcp.tool()
+def create_task(
+    title: str,
+    description: str | None = None,
+    priority: TaskPriority | None = None,
+    due_date: str | None = None,
+) -> dict[str, Any]:
+    """Create a task by calling the Java backend Task REST API."""
+    request_body = {
+        "title": title,
+        "description": description,
+        "priority": priority,
+        "dueDate": due_date,
+    }
+
+    response = httpx.post(f"{TASK_API_BASE_URL}/api/tasks", json=request_body, timeout=10.0)
     response.raise_for_status()
     return response.json()
 

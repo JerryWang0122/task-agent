@@ -58,6 +58,7 @@ The server exposes these tools:
 - `health_check`: confirms the MCP Server is running
 - `list_tasks`: calls `GET /api/tasks` on the Java backend
 - `get_task`: calls `GET /api/tasks/{id}` on the Java backend
+- `create_task`: calls `POST /api/tasks` on the Java backend
 
 By default, the MCP Server calls:
 
@@ -106,9 +107,12 @@ Available tools:
   Name: health_check
   Name: list_tasks
   Name: get_task
+  Name: create_task
 list_tasks result:
 ...
 get_task result:
+...
+create_task result:
 ...
 ```
 
@@ -117,3 +121,5 @@ The task data should match the response from:
 ```bash
 curl http://localhost:8080/api/tasks
 ```
+
+`create_task` changes backend data. In this tutorial phase, the manual test calls it directly so we can verify the tool. Later, the Agent workflow will add confirmation before write operations.
