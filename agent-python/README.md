@@ -80,6 +80,13 @@ complete task 1
 yes
 ```
 
+To create a task:
+
+```text
+create task Buy milk
+yes
+```
+
 Answer `no` to cancel without changing data.
 
 For this step, routing is rule-based. Later, an LLM can replace this rule and choose tools from MCP metadata.

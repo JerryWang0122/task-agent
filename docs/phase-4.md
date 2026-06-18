@@ -258,3 +258,35 @@ Write tools require explicit confirmation.
 ```
 
 Enterprise Agent systems need this pattern because tool calls can modify real business data.
+
+## Create Task Confirmation Flow
+
+The Agent now recognizes simple task creation requests, such as:
+
+```text
+create task Buy milk
+add task Read MCP docs
+```
+
+For this first version, the Agent only extracts the task title.
+Other fields such as priority and due date are left unset, so the Java service applies its defaults.
+
+Because `create_task` changes backend data, it uses the same confirmation pattern:
+
+```text
+User: create task Buy milk
+Agent: Confirm: create task 'Buy milk'? Type 'yes' or 'no'.
+User: yes
+Agent: call_tool("create_task", arguments={"title": "Buy milk"})
+```
+
+If the user answers `no`, the Agent clears the pending action and does not call the tool.
+
+This shows a second write-tool pattern:
+
+```text
+Complete task: extract task_id, confirm, call complete_task.
+Create task: extract title, confirm, call create_task.
+```
+
+The important learning point is that the Agent owns workflow safety, while the Java backend still owns business defaults and validation.

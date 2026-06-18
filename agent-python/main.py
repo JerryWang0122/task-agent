@@ -119,6 +119,41 @@ async def complete_task(task_id: int) -> str:
             return f"Completed task #{task['id']}: {task['title']}"
 
 
+async def create_task(title: str) -> str:
+    """Call the MCP create_task tool after the user confirms the action."""
+    server_python = os.getenv("MCP_SERVER_PYTHON", sys.executable)
+    server_parameters = StdioServerParameters(
+        command=server_python,
+        args=["main.py"],
+        cwd=MCP_SERVER_DIR,
+    )
+
+    async with stdio_client(server_parameters) as (read_stream, write_stream):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+            result = await session.call_tool("create_task", arguments={"title": title})
+
+            structured_content = result.structuredContent or {}
+            task = structured_content.get("result")
+            if task is None:
+                task = json.loads(result.content[0].text)
+
+            return f"Created task #{task['id']}: {task['title']}"
+
+
+def extract_create_task_title(user_message: str) -> str | None:
+    """Extract a title from simple phrases like 'create task Buy milk'."""
+    match = re.search(r"^(?:create|add)\s+(?:a\s+)?task\s+(.+)$", user_message, re.IGNORECASE)
+    if not match:
+        return None
+
+    title = match.group(1).strip()
+    if not title:
+        return None
+
+    return title
+
+
 def extract_task_id(user_message: str) -> int | None:
     """Extract a task id from simple phrases like 'task 1' or '#1'."""
     match = re.search(r"(?:task\s*#?|#)(\d+)", user_message.lower())
@@ -161,7 +196,7 @@ def answer(user_message: str) -> str:
 def main() -> None:
     print("Personal Task Agent")
     print("Type a task question, 'tools', 'tasks', or 'exit' to quit.")
-    pending_action: dict[str, int] | None = None
+    pending_action: dict[str, object] | None = None
 
     while True:
         user_message = input("> ").strip()
@@ -176,9 +211,22 @@ def main() -> None:
 
         if pending_action is not None:
             if normalized_message in {"yes", "y", "confirm"}:
-                task_id = pending_action["task_id"]
+                action_type = pending_action["type"]
+
+                if action_type == "complete_task":
+                    task_id = int(pending_action["task_id"])
+                    pending_action = None
+                    print(asyncio.run(complete_task(task_id)))
+                    continue
+
+                if action_type == "create_task":
+                    title = str(pending_action["title"])
+                    pending_action = None
+                    print(asyncio.run(create_task(title)))
+                    continue
+
                 pending_action = None
-                print(asyncio.run(complete_task(task_id)))
+                print("Cancelled unknown pending action.")
                 continue
 
             if normalized_message in {"no", "n", "cancel"}:
@@ -199,8 +247,14 @@ def main() -> None:
 
         if should_complete_task(user_message):
             task_id = extract_task_id(user_message)
-            pending_action = {"task_id": task_id}
+            pending_action = {"type": "complete_task", "task_id": task_id}
             print(f"Confirm: mark task #{task_id} as completed? Type 'yes' or 'no'.")
+            continue
+
+        create_title = extract_create_task_title(user_message)
+        if create_title is not None:
+            pending_action = {"type": "create_task", "title": create_title}
+            print(f"Confirm: create task '{create_title}'? Type 'yes' or 'no'.")
             continue
 
         task_id = extract_task_id(user_message)
