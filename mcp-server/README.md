@@ -83,3 +83,31 @@ Agent
 ```
 
 This keeps the MCP Server thin. It exposes an Agent-friendly tool, but the Java backend still owns the task business logic and persistence.
+
+## Manual MCP client test
+
+With the Java backend running, call the MCP tool through a small MCP client script:
+
+```bash
+python manual_test.py
+```
+
+If your shell does not provide a `python` command, use the virtual environment Python directly:
+
+```bash
+.venv/bin/python manual_test.py
+```
+
+Expected result:
+
+```text
+Available tools: health_check, list_tasks
+list_tasks result:
+...
+```
+
+The task data should match the response from:
+
+```bash
+curl http://localhost:8080/api/tasks
+```

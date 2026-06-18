@@ -98,3 +98,49 @@ Important design point:
 The MCP tool does not query the database directly.
 It only calls the Java API and returns that API result.
 ```
+
+## Manual Test Client
+
+`manual_test.py` is a small MCP client used for local verification.
+
+It does three things:
+
+- starts `main.py` as an MCP Server over stdio
+- lists available MCP tools
+- calls `list_tasks`
+
+Implementation note:
+
+```text
+The script uses the same Python executable that runs manual_test.py.
+This avoids assuming that a shell-level python command exists.
+```
+
+Why this matters:
+
+```text
+Running python main.py only starts the server and waits.
+manual_test.py proves that a client can actually call the MCP tool.
+```
+
+Expected local test flow:
+
+```text
+Terminal 1: start Java backend
+Terminal 2: run python manual_test.py
+```
+
+Expected output includes:
+
+```text
+Available tools: health_check, list_tasks
+list_tasks result:
+```
+
+Verified result:
+
+```text
+The MCP client called list_tasks successfully.
+The tool called GET http://localhost:8080/api/tasks.
+The response included the 4 seeded tasks from the Java backend.
+```
