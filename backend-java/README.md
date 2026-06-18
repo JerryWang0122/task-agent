@@ -28,7 +28,7 @@ export JAVA_HOME=$(/usr/libexec/java_home -v 17)
 mvn test
 ```
 
-At this stage the app only starts. Task APIs will be added in the next phase.
+The app exposes task REST APIs and stores tasks through JPA/H2.
 
 ## Task Domain Model
 
@@ -45,19 +45,21 @@ Initial fields:
 - `createdAt`: when the task was created
 - `updatedAt`: when the task was last changed
 
-At this stage `Task` is a plain Java object, not a database entity yet. Persistence will be added later so we can first focus on the domain language.
+`Task` is now also a JPA entity, so Hibernate can map it to the `tasks` database table.
 
 ## Repository Layer
 
-`TaskRepository` is the data access boundary for tasks.
+`TaskJpaRepository` is the data access boundary for tasks.
 
-For now it uses an in-memory `Map`, which means data disappears when the application stops.
+It extends Spring Data JPA's `JpaRepository`, so Spring generates common CRUD operations for us.
 
-This is intentional for the tutorial:
+Current repository responsibilities:
 
-- It lets us learn the repository responsibility before adding a database.
-- It keeps the first REST API simple.
-- It creates a seam where we can later replace memory storage with H2/JPA.
+- Save tasks
+- Find tasks by id
+- List tasks
+- Delete tasks
+- Delegate SQL generation to Spring Data JPA and Hibernate
 
 ## Service Layer
 
@@ -71,7 +73,7 @@ Current responsibilities:
 - Mark a task as completed
 - Delete a task
 
-The service depends on `TaskRepository`, but controllers and future MCP tools should depend on the service instead of directly modifying storage.
+The service depends on `TaskJpaRepository`, but controllers and future MCP tools should depend on the service instead of directly modifying storage.
 
 ## REST API Layer
 

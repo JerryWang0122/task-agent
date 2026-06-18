@@ -10,7 +10,7 @@ Why:
 - The Agent should call backend capabilities instead of directly modifying data.
 - A stable REST API makes the future MCP layer easier to test.
 
-## Current Backend Layers
+## Phase 1 Backend Layers
 
 ```text
 TaskController
@@ -19,11 +19,22 @@ TaskController
   -> in-memory Map
 ```
 
+Phase 1 intentionally used an in-memory repository so we could learn the REST API layers before adding persistence.
+
+Phase 2 has since evolved this path to:
+
+```text
+TaskController
+  -> TaskService
+  -> TaskJpaRepository
+  -> H2 database
+```
+
 Responsibilities:
 
 - `TaskController`: HTTP boundary
 - `TaskService`: business workflows
-- `TaskRepository`: data access boundary
+- `TaskRepository`: Phase 1 in-memory data access boundary
 - `Task`: domain model
 - DTO classes: API request and response shapes
 
@@ -136,8 +147,8 @@ This verifies that the backend can be used by an external client over HTTP.
 
 That matters because the future MCP Server will also behave like a client of this backend API.
 
-## Current Limitation
+## Phase 1 Limitation
 
 Tasks are stored in memory, so data disappears when the backend restarts.
 
-This is intentional for Phase 1. Persistence will be added in Phase 2.
+This was intentional for Phase 1. Phase 2 replaces the in-memory repository with Spring Data JPA and H2.
