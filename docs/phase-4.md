@@ -145,3 +145,38 @@ Tool execution lets the Agent actually use backend capabilities.
 
 For now, the command is explicit.
 Later, natural-language input such as "show my tasks" can map to this same tool call.
+
+## First Natural-Language Routing Rule
+
+The Agent now recognizes simple task-listing requests, such as:
+
+```text
+show my tasks
+list todos
+what tasks do I have
+```
+
+These requests call the same `list_tasks` MCP tool as the explicit `tasks` command.
+
+The routing logic is intentionally simple:
+
+```text
+If the user message contains a task-related word and a list-related word,
+then call list_tasks.
+```
+
+Why use a rule before an LLM:
+
+- it makes the Agent control flow visible
+- it keeps tool execution deterministic while learning
+- it shows exactly where LLM-based tool selection will fit later
+
+The updated flow is:
+
+```text
+User natural language
+  -> Python Agent rule-based router
+  -> MCP Client call_tool("list_tasks")
+  -> MCP Server
+  -> Java Task API
+```

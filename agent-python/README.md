@@ -57,4 +57,12 @@ Available local commands:
 - `tasks`: call the MCP `list_tasks` tool and show tasks from the Java backend
 - `exit`: quit the Agent CLI
 
-For this step, the Agent can inspect MCP tools and call the read-only `list_tasks` tool. It does not yet decide which tool to call for natural-language requests.
+The Agent also recognizes simple natural-language task listing requests, such as:
+
+```text
+show my tasks
+list todos
+what tasks do I have
+```
+
+For this step, routing is rule-based. Later, an LLM can replace this rule and choose tools from MCP metadata.

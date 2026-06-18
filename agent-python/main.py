@@ -66,6 +66,17 @@ async def list_tasks() -> str:
             return "\n".join(lines)
 
 
+def should_list_tasks(user_message: str) -> bool:
+    """Return True when the user is asking to see task records."""
+    normalized_message = user_message.lower()
+    task_words = {"task", "tasks", "todo", "todos"}
+    list_words = {"show", "list", "see", "view", "display", "what"}
+
+    return any(word in normalized_message for word in task_words) and any(
+        word in normalized_message for word in list_words
+    )
+
+
 def answer(user_message: str) -> str:
     """Return a placeholder response until MCP and LLM integration are added."""
     return (
@@ -94,6 +105,10 @@ def main() -> None:
             continue
 
         if user_message.lower() == "tasks":
+            print(asyncio.run(list_tasks()))
+            continue
+
+        if should_list_tasks(user_message):
             print(asyncio.run(list_tasks()))
             continue
 
