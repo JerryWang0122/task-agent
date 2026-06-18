@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -66,6 +67,45 @@ async def list_tasks() -> str:
             return "\n".join(lines)
 
 
+async def get_task(task_id: int) -> str:
+    """Call the MCP get_task tool and format one task for the user."""
+    server_python = os.getenv("MCP_SERVER_PYTHON", sys.executable)
+    server_parameters = StdioServerParameters(
+        command=server_python,
+        args=["main.py"],
+        cwd=MCP_SERVER_DIR,
+    )
+
+    async with stdio_client(server_parameters) as (read_stream, write_stream):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+            result = await session.call_tool("get_task", arguments={"task_id": task_id})
+
+            structured_content = result.structuredContent or {}
+            task = structured_content.get("result")
+            if task is None:
+                task = json.loads(result.content[0].text)
+
+            due_date = task.get("dueDate") or "no due date"
+            description = task.get("description") or "no description"
+            return (
+                f"Task #{task['id']}: {task['title']}\n"
+                f"Status: {task['status']}\n"
+                f"Priority: {task['priority']}\n"
+                f"Due date: {due_date}\n"
+                f"Description: {description}"
+            )
+
+
+def extract_task_id(user_message: str) -> int | None:
+    """Extract a task id from simple phrases like 'task 1' or '#1'."""
+    match = re.search(r"(?:task\s*#?|#)(\d+)", user_message.lower())
+    if not match:
+        return None
+
+    return int(match.group(1))
+
+
 def should_list_tasks(user_message: str) -> bool:
     """Return True when the user is asking to see task records."""
     normalized_message = user_message.lower()
@@ -106,6 +146,11 @@ def main() -> None:
 
         if user_message.lower() == "tasks":
             print(asyncio.run(list_tasks()))
+            continue
+
+        task_id = extract_task_id(user_message)
+        if task_id is not None:
+            print(asyncio.run(get_task(task_id)))
             continue
 
         if should_list_tasks(user_message):

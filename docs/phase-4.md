@@ -180,3 +180,39 @@ User natural language
   -> MCP Server
   -> Java Task API
 ```
+
+## First Tool Call With Arguments
+
+The Agent now recognizes simple single-task requests, such as:
+
+```text
+task 1
+show task 1
+#1
+```
+
+These requests call the MCP `get_task` tool with an argument:
+
+```text
+call_tool("get_task", arguments={"task_id": 1})
+```
+
+This is a new Agent responsibility compared with `list_tasks`.
+The Agent now has to do two things:
+
+- choose the right tool
+- extract the argument needed by that tool
+
+The runtime path is:
+
+```text
+User says "show task 1"
+  -> Python Agent extracts task_id = 1
+  -> MCP Client call_tool("get_task", {"task_id": 1})
+  -> MCP Server get_task tool
+  -> Java GET /api/tasks/1
+  -> H2 database
+```
+
+For now, argument extraction is rule-based with a small regular expression.
+Later, an LLM can produce the same structured argument from natural language.

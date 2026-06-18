@@ -65,4 +65,12 @@ list todos
 what tasks do I have
 ```
 
+It can also fetch one task by id:
+
+```text
+task 1
+show task 1
+#1
+```
+
 For this step, routing is rule-based. Later, an LLM can replace this rule and choose tools from MCP metadata.
