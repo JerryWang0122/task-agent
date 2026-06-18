@@ -7,10 +7,41 @@ from pathlib import Path
 
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
+from openai import OpenAI
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MCP_SERVER_DIR = PROJECT_ROOT / "mcp-server"
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+
+
+def decide_with_llm(user_message: str) -> str:
+    """Ask OpenAI for a structured decision without executing any tool."""
+    if not os.getenv("OPENAI_API_KEY"):
+        return "OPENAI_API_KEY is not set. Export it before using ask-llm."
+
+    client = OpenAI()
+    response = client.chat.completions.create(
+        model=OPENAI_MODEL,
+        response_format={"type": "json_object"},
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are the decision layer for a personal task Agent. "
+                    "Return only JSON. Do not execute tools. "
+                    "Use this shape: "
+                    '{"action":"respond|call_tool", "tool_name":null, '
+                    '"arguments":{}, "requires_confirmation":false, "response":null}. '
+                    "Available tools are list_tasks, get_task, create_task, and complete_task. "
+                    "Set requires_confirmation to true for create_task and complete_task."
+                ),
+            },
+            {"role": "user", "content": user_message},
+        ],
+    )
+
+    return response.choices[0].message.content or "{}"
 
 
 async def list_mcp_tools() -> str:
@@ -195,7 +226,7 @@ def answer(user_message: str) -> str:
 
 def main() -> None:
     print("Personal Task Agent")
-    print("Type a task question, 'tools', 'tasks', or 'exit' to quit.")
+    print("Type a task question, 'tools', 'tasks', 'ask-llm <message>', or 'exit' to quit.")
     pending_action: dict[str, object] | None = None
 
     while True:
@@ -239,6 +270,15 @@ def main() -> None:
 
         if normalized_message == "tools":
             print(asyncio.run(list_mcp_tools()))
+            continue
+
+        if normalized_message.startswith("ask-llm "):
+            llm_message = user_message[len("ask-llm ") :].strip()
+            if not llm_message:
+                print("Please provide a message after ask-llm.")
+                continue
+
+            print(decide_with_llm(llm_message))
             continue
 
         if normalized_message == "tasks":

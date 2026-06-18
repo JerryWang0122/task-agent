@@ -45,6 +45,13 @@ The Agent starts the MCP Server as a subprocess. If the MCP Server dependencies 
 export MCP_SERVER_PYTHON=../mcp-server/.venv/bin/python
 ```
 
+To use the OpenAI decision-layer demo, set:
+
+```bash
+export OPENAI_API_KEY=your_api_key_here
+export OPENAI_MODEL=gpt-4.1-mini
+```
+
 ## Run
 
 ```bash
@@ -55,6 +62,7 @@ Available local commands:
 
 - `tools`: start the MCP Server and list available MCP tools
 - `tasks`: call the MCP `list_tasks` tool and show tasks from the Java backend
+- `ask-llm <message>`: ask OpenAI for a structured Agent decision without executing tools
 - `exit`: quit the Agent CLI
 
 The Agent also recognizes simple natural-language task listing requests, such as:
@@ -90,3 +98,5 @@ yes
 Answer `no` to cancel without changing data.
 
 For this step, routing is rule-based. Later, an LLM can replace this rule and choose tools from MCP metadata.
+
+The `ask-llm` command is the first LLM step. It returns a JSON decision, but the Agent does not execute that decision yet.

@@ -5,6 +5,7 @@ description = "Python Agent orchestration layer for the Personal Task Management
 requires-python = ">=3.11"
 dependencies = [
     "mcp>=1.0.0",
+    "openai>=1.0.0",
 ]
 
 [project.optional-dependencies]
