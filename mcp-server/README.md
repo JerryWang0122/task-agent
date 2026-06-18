@@ -57,6 +57,7 @@ The server exposes these tools:
 
 - `health_check`: confirms the MCP Server is running
 - `list_tasks`: calls `GET /api/tasks` on the Java backend
+- `get_task`: calls `GET /api/tasks/{id}` on the Java backend
 
 By default, the MCP Server calls:
 
@@ -101,8 +102,13 @@ If your shell does not provide a `python` command, use the virtual environment P
 Expected result:
 
 ```text
-Available tools: health_check, list_tasks
+Available tools:
+  Name: health_check
+  Name: list_tasks
+  Name: get_task
 list_tasks result:
+...
+get_task result:
 ...
 ```
 

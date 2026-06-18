@@ -24,5 +24,13 @@ def list_tasks() -> list[dict[str, Any]]:
     return response.json()
 
 
+@mcp.tool()
+def get_task(task_id: int) -> dict[str, Any]:
+    """Get one task by id from the Java backend Task REST API."""
+    response = httpx.get(f"{TASK_API_BASE_URL}/api/tasks/{task_id}", timeout=10.0)
+    response.raise_for_status()
+    return response.json()
+
+
 if __name__ == "__main__":
     mcp.run()

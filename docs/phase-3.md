@@ -144,3 +144,63 @@ The MCP client called list_tasks successfully.
 The tool called GET http://localhost:8080/api/tasks.
 The response included the 4 seeded tasks from the Java backend.
 ```
+
+## Second Tool: get_task
+
+`get_task` retrieves one task by id.
+
+Purpose:
+
+```text
+Return one specific task to the Agent when the task id is known.
+```
+
+Backend API it calls:
+
+```text
+GET /api/tasks/{id}
+```
+
+Tool input:
+
+```text
+task_id: integer
+```
+
+The MCP tool schema is generated from the Python function signature:
+
+```python
+def get_task(task_id: int) -> dict[str, Any]:
+```
+
+The tool description is generated from the Python docstring:
+
+```python
+"""Get one task by id from the Java backend Task REST API."""
+```
+
+Data flow:
+
+```text
+Agent
+  -> get_task MCP tool with task_id
+  -> Java REST API GET /api/tasks/{id}
+  -> TaskService
+  -> TaskJpaRepository
+  -> H2 database
+```
+
+Why this tool matters:
+
+```text
+An Agent often lists tasks first, then fetches one task for detail before answering or deciding what to do next.
+```
+
+Verified result:
+
+```text
+The MCP client listed get_task as an available tool.
+The generated input schema required task_id as an integer.
+The MCP client called get_task with task_id = 1.
+The tool called GET http://localhost:8080/api/tasks/1 successfully.
+```
