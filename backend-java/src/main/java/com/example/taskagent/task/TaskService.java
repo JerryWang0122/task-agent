@@ -1,21 +1,23 @@
 package com.example.taskagent.task;
 
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
 @Service
 public class TaskService {
 
-    private final TaskRepository taskRepository;
+    private final TaskJpaRepository taskRepository;
 
-    public TaskService(TaskRepository taskRepository) {
+    public TaskService(TaskJpaRepository taskRepository) {
         this.taskRepository = taskRepository;
     }
 
     public List<Task> listTasks() {
-        return taskRepository.findAll();
+        return taskRepository.findAll(Sort.by(Sort.Direction.ASC, "id"));
     }
 
     public Optional<Task> getTask(Long id) {
@@ -23,12 +25,18 @@ public class TaskService {
     }
 
     public Task createTask(Task task) {
+        OffsetDateTime now = OffsetDateTime.now();
+
         if (task.getStatus() == null) {
             task.setStatus(TaskStatus.TODO);
         }
         if (task.getPriority() == null) {
             task.setPriority(TaskPriority.MEDIUM);
         }
+        if (task.getCreatedAt() == null) {
+            task.setCreatedAt(now);
+        }
+        task.setUpdatedAt(now);
 
         return taskRepository.save(task);
     }
@@ -37,11 +45,17 @@ public class TaskService {
         return taskRepository.findById(id)
                 .map(task -> {
                     task.setStatus(TaskStatus.DONE);
+                    task.setUpdatedAt(OffsetDateTime.now());
                     return taskRepository.save(task);
                 });
     }
 
     public boolean deleteTask(Long id) {
-        return taskRepository.deleteById(id);
+        if (!taskRepository.existsById(id)) {
+            return false;
+        }
+
+        taskRepository.deleteById(id);
+        return true;
     }
 }

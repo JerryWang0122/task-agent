@@ -1,56 +1,96 @@
 package com.example.taskagent.task;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.Sort;
+
+import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class TaskServiceTests {
 
     @Test
     void createTaskAppliesDefaultStatusAndPriority() {
-        TaskService service = new TaskService(new TaskRepository());
+        TaskJpaRepository repository = mock(TaskJpaRepository.class);
+        TaskService service = new TaskService(repository);
 
         Task task = new Task();
         task.setTitle("Review Spring Boot API design");
+        when(repository.save(any(Task.class))).thenAnswer(invocation -> {
+            Task savedTask = invocation.getArgument(0);
+            savedTask.setId(1L);
+            return savedTask;
+        });
 
         Task createdTask = service.createTask(task);
 
         assertThat(createdTask.getId()).isEqualTo(1L);
         assertThat(createdTask.getStatus()).isEqualTo(TaskStatus.TODO);
         assertThat(createdTask.getPriority()).isEqualTo(TaskPriority.MEDIUM);
+        assertThat(createdTask.getCreatedAt()).isNotNull();
+        assertThat(createdTask.getUpdatedAt()).isNotNull();
     }
 
     @Test
     void completeTaskMarksExistingTaskAsDone() {
-        TaskService service = new TaskService(new TaskRepository());
+        TaskJpaRepository repository = mock(TaskJpaRepository.class);
+        TaskService service = new TaskService(repository);
 
         Task task = new Task();
+        task.setId(1L);
         task.setTitle("Pay electricity bill");
-        Task createdTask = service.createTask(task);
+        task.setStatus(TaskStatus.TODO);
+        task.setPriority(TaskPriority.MEDIUM);
+        when(repository.findById(1L)).thenReturn(Optional.of(task));
+        when(repository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        assertThat(service.completeTask(createdTask.getId()))
-                .hasValueSatisfying(completedTask -> assertThat(completedTask.getStatus()).isEqualTo(TaskStatus.DONE));
+        assertThat(service.completeTask(1L))
+                .hasValueSatisfying(completedTask -> {
+                    assertThat(completedTask.getStatus()).isEqualTo(TaskStatus.DONE);
+                    assertThat(completedTask.getUpdatedAt()).isNotNull();
+                });
     }
 
     @Test
     void completeTaskReturnsEmptyWhenTaskDoesNotExist() {
-        TaskService service = new TaskService(new TaskRepository());
+        TaskJpaRepository repository = mock(TaskJpaRepository.class);
+        TaskService service = new TaskService(repository);
+        when(repository.findById(999L)).thenReturn(Optional.empty());
 
         assertThat(service.completeTask(999L)).isEmpty();
     }
 
     @Test
     void listTasksReturnsCreatedTasks() {
-        TaskService service = new TaskService(new TaskRepository());
+        TaskJpaRepository repository = mock(TaskJpaRepository.class);
+        TaskService service = new TaskService(repository);
 
         Task firstTask = new Task();
+        firstTask.setId(1L);
         firstTask.setTitle("Prepare weekly report");
         Task secondTask = new Task();
+        secondTask.setId(2L);
         secondTask.setTitle("Read MCP documentation");
+        when(repository.findAll(Sort.by(Sort.Direction.ASC, "id")))
+                .thenReturn(List.of(firstTask, secondTask));
 
-        Task createdFirstTask = service.createTask(firstTask);
-        Task createdSecondTask = service.createTask(secondTask);
+        assertThat(service.listTasks()).containsExactly(firstTask, secondTask);
+    }
 
-        assertThat(service.listTasks()).containsExactly(createdFirstTask, createdSecondTask);
+    @Test
+    void deleteTaskDeletesExistingTask() {
+        TaskJpaRepository repository = mock(TaskJpaRepository.class);
+        TaskService service = new TaskService(repository);
+        when(repository.existsById(1L)).thenReturn(true);
+
+        boolean deleted = service.deleteTask(1L);
+
+        assertThat(deleted).isTrue();
+        verify(repository).deleteById(1L);
     }
 }
