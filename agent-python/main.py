@@ -1,4 +1,5 @@
 import asyncio
+from datetime import UTC, datetime
 import json
 import os
 import re
@@ -71,14 +72,15 @@ async def decide_with_openai_tools(user_message: str) -> dict[str, object]:
     response = client.chat.completions.create(
         model=OPENAI_MODEL,
         tools=openai_tools,
-        tool_choice="auto",
+        tool_choice="required",
         messages=[
             {
                 "role": "system",
                 "content": (
                     "You are a personal task Agent. Use tools when task data is needed. "
-                    "For create_task and complete_task, request the tool call; "
-                    "the Agent runtime will ask the user for confirmation before execution."
+                    "For create_task and complete_task, you must request the tool call. "
+                    "Do not ask the user for confirmation in natural language. "
+                    "The Agent runtime will ask the user for confirmation before execution."
                 ),
             },
             {"role": "user", "content": user_message},
@@ -152,6 +154,18 @@ def mcp_tool_to_openai_tool(tool: object) -> dict[str, object]:
             "parameters": tool.inputSchema or {"type": "object", "properties": {}},
         },
     }
+
+
+def log_tool_call(tool_name: str, arguments: dict[str, object], status: str) -> None:
+    """Print a simple tool-call audit log line."""
+    timestamp = datetime.now(UTC).isoformat()
+    print(
+        "TOOL_CALL "
+        f"timestamp={timestamp} "
+        f"tool={tool_name} "
+        f"status={status} "
+        f"arguments={json.dumps(arguments, sort_keys=True)}"
+    )
 
 
 async def execute_llm_decision(decision: dict[str, object]) -> str:
@@ -272,8 +286,8 @@ async def list_openai_tools() -> str:
     return json.dumps(await get_openai_tools(), indent=2)
 
 
-async def list_tasks() -> str:
-    """Call the MCP list_tasks tool and format the result for the user."""
+async def call_mcp_tool(tool_name: str, arguments: dict[str, object]) -> object:
+    """Call one MCP tool and log the execution result."""
     server_python = os.getenv("MCP_SERVER_PYTHON", sys.executable)
     server_parameters = StdioServerParameters(
         command=server_python,
@@ -281,102 +295,85 @@ async def list_tasks() -> str:
         cwd=MCP_SERVER_DIR,
     )
 
-    async with stdio_client(server_parameters) as (read_stream, write_stream):
-        async with ClientSession(read_stream, write_stream) as session:
-            await session.initialize()
-            result = await session.call_tool("list_tasks", arguments={})
+    log_tool_call(tool_name, arguments, "started")
+    try:
+        async with stdio_client(server_parameters) as (read_stream, write_stream):
+            async with ClientSession(read_stream, write_stream) as session:
+                await session.initialize()
+                result = await session.call_tool(tool_name, arguments=arguments)
 
-            structured_content = result.structuredContent or {}
-            tasks = structured_content.get("result")
-            if tasks is None:
-                tasks = [json.loads(content.text) for content in result.content]
+        log_tool_call(tool_name, arguments, "succeeded")
+        return result
+    except Exception:
+        log_tool_call(tool_name, arguments, "failed")
+        raise
 
-            if not tasks:
-                return "No tasks found."
 
-            lines = ["Tasks from the Java backend:"]
-            for task in tasks:
-                due_date = task.get("dueDate") or "no due date"
-                lines.append(
-                    f"- #{task['id']} {task['title']} "
-                    f"[{task['status']}, {task['priority']}, due: {due_date}]"
-                )
+async def list_tasks() -> str:
+    """Call the MCP list_tasks tool and format the result for the user."""
+    result = await call_mcp_tool("list_tasks", {})
 
-            return "\n".join(lines)
+    structured_content = result.structuredContent or {}
+    tasks = structured_content.get("result")
+    if tasks is None:
+        tasks = [json.loads(content.text) for content in result.content]
+
+    if not tasks:
+        return "No tasks found."
+
+    lines = ["Tasks from the Java backend:"]
+    for task in tasks:
+        due_date = task.get("dueDate") or "no due date"
+        lines.append(
+            f"- #{task['id']} {task['title']} "
+            f"[{task['status']}, {task['priority']}, due: {due_date}]"
+        )
+
+    return "\n".join(lines)
 
 
 async def get_task(task_id: int) -> str:
     """Call the MCP get_task tool and format one task for the user."""
-    server_python = os.getenv("MCP_SERVER_PYTHON", sys.executable)
-    server_parameters = StdioServerParameters(
-        command=server_python,
-        args=["main.py"],
-        cwd=MCP_SERVER_DIR,
+    result = await call_mcp_tool("get_task", {"task_id": task_id})
+
+    structured_content = result.structuredContent or {}
+    task = structured_content.get("result")
+    if task is None:
+        task = json.loads(result.content[0].text)
+
+    due_date = task.get("dueDate") or "no due date"
+    description = task.get("description") or "no description"
+    return (
+        f"Task #{task['id']}: {task['title']}\n"
+        f"Status: {task['status']}\n"
+        f"Priority: {task['priority']}\n"
+        f"Due date: {due_date}\n"
+        f"Description: {description}"
     )
-
-    async with stdio_client(server_parameters) as (read_stream, write_stream):
-        async with ClientSession(read_stream, write_stream) as session:
-            await session.initialize()
-            result = await session.call_tool("get_task", arguments={"task_id": task_id})
-
-            structured_content = result.structuredContent or {}
-            task = structured_content.get("result")
-            if task is None:
-                task = json.loads(result.content[0].text)
-
-            due_date = task.get("dueDate") or "no due date"
-            description = task.get("description") or "no description"
-            return (
-                f"Task #{task['id']}: {task['title']}\n"
-                f"Status: {task['status']}\n"
-                f"Priority: {task['priority']}\n"
-                f"Due date: {due_date}\n"
-                f"Description: {description}"
-            )
 
 
 async def complete_task(task_id: int) -> str:
     """Call the MCP complete_task tool after the user confirms the action."""
-    server_python = os.getenv("MCP_SERVER_PYTHON", sys.executable)
-    server_parameters = StdioServerParameters(
-        command=server_python,
-        args=["main.py"],
-        cwd=MCP_SERVER_DIR,
-    )
+    result = await call_mcp_tool("complete_task", {"task_id": task_id})
 
-    async with stdio_client(server_parameters) as (read_stream, write_stream):
-        async with ClientSession(read_stream, write_stream) as session:
-            await session.initialize()
-            result = await session.call_tool("complete_task", arguments={"task_id": task_id})
+    structured_content = result.structuredContent or {}
+    task = structured_content.get("result")
+    if task is None:
+        task = json.loads(result.content[0].text)
 
-            structured_content = result.structuredContent or {}
-            task = structured_content.get("result")
-            if task is None:
-                task = json.loads(result.content[0].text)
-
-            return f"Completed task #{task['id']}: {task['title']}"
+    return f"Completed task #{task['id']}: {task['title']}"
 
 
 async def create_task(title: str) -> str:
     """Call the MCP create_task tool after the user confirms the action."""
-    server_python = os.getenv("MCP_SERVER_PYTHON", sys.executable)
-    server_parameters = StdioServerParameters(
-        command=server_python,
-        args=["main.py"],
-        cwd=MCP_SERVER_DIR,
-    )
+    result = await call_mcp_tool("create_task", {"title": title})
 
-    async with stdio_client(server_parameters) as (read_stream, write_stream):
-        async with ClientSession(read_stream, write_stream) as session:
-            await session.initialize()
-            result = await session.call_tool("create_task", arguments={"title": title})
+    structured_content = result.structuredContent or {}
+    task = structured_content.get("result")
+    if task is None:
+        task = json.loads(result.content[0].text)
 
-            structured_content = result.structuredContent or {}
-            task = structured_content.get("result")
-            if task is None:
-                task = json.loads(result.content[0].text)
-
-            return f"Created task #{task['id']}: {task['title']}"
+    return f"Created task #{task['id']}: {task['title']}"
 
 
 def extract_create_task_title(user_message: str) -> str | None:

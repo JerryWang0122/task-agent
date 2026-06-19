@@ -260,13 +260,13 @@ This is a safety and product-design choice. Just because an MCP Server has a too
 
 The Agent now has an `ask-tools` command.
 
-This command uses OpenAI's automatic tool calling flow:
+This command uses OpenAI's tool calling flow:
 
 ```text
 User message
   -> Agent fetches MCP tool metadata
   -> Agent converts MCP tools into OpenAI tool definitions
-  -> OpenAI chooses whether to request a tool call
+  -> OpenAI requests a tool call
   -> Agent converts the OpenAI tool call into an internal decision
   -> Agent runtime applies safety policy
   -> Agent executes MCP tool or asks for confirmation
@@ -284,7 +284,7 @@ The important difference from `ask-llm` is where the tool decision comes from.
 }
 ```
 
-`ask-tools` gives OpenAI tool definitions and lets the model return an OpenAI tool call:
+`ask-tools` gives OpenAI tool definitions and requires the model to return an OpenAI tool call:
 
 ```text
 tool_call: list_tasks({})
@@ -311,6 +311,20 @@ The model may choose a tool.
 The Agent runtime owns execution.
 The backend owns business rules and data.
 ```
+
+For this tutorial step, `ask-tools` uses `tool_choice="required"` instead of `tool_choice="auto"`.
+
+Why:
+
+```text
+If the model responds with natural language like "Confirm to proceed?",
+the Agent does not have a pending tool action.
+
+The confirmation must belong to the Agent runtime,
+so write intents need to become tool calls first.
+```
+
+Later, a more complete Agent can use `tool_choice="auto"` together with a richer planner that decides when tool use is optional.
 
 ## Step 5.6: Unified Decision Policy Pipeline
 
@@ -348,3 +362,45 @@ Execution should still go through MCP.
 ```
 
 This prepares the project for later workflow frameworks such as LangGraph, where this same policy step can become a graph node.
+
+## Step 5.7: Tool Call Logging
+
+The Agent now logs every MCP business tool call.
+
+The first version is intentionally simple. Each tool call prints a line like:
+
+```text
+TOOL_CALL timestamp=2026-06-19T12:00:00+00:00 tool=list_tasks status=started arguments={}
+TOOL_CALL timestamp=2026-06-19T12:00:01+00:00 tool=list_tasks status=succeeded arguments={}
+```
+
+The Agent logs three fields that matter for an audit trail:
+
+```text
+Which tool was called?
+What arguments were sent?
+Did the call start, succeed, or fail?
+```
+
+The implementation uses a shared wrapper:
+
+```text
+list_tasks()
+get_task()
+create_task()
+complete_task()
+  -> call_mcp_tool()
+  -> log started
+  -> session.call_tool(...)
+  -> log succeeded or failed
+```
+
+Why this matters in enterprise Agent systems:
+
+```text
+Tool calls may read or modify business data.
+Users and operators need to know what the Agent attempted.
+Logs are the foundation for auditing, debugging, metrics, and tracing.
+```
+
+This is not a full production observability solution yet. Later enhancements could replace `print()` logs with structured logging, OpenTelemetry spans, LangSmith traces, or persistent audit records.
