@@ -105,6 +105,39 @@ async def execute_llm_decision(decision: dict[str, object]) -> str:
     return f"Unsupported LLM tool: {tool_name}"
 
 
+def pending_action_from_llm_decision(decision: dict[str, object]) -> tuple[dict[str, object], str] | None:
+    """Convert an LLM write-tool decision into a pending confirmation action."""
+    if decision.get("action") != "call_tool":
+        return None
+
+    arguments = decision.get("arguments") or {}
+    if not isinstance(arguments, dict):
+        return None
+
+    tool_name = decision.get("tool_name")
+    if tool_name == "complete_task":
+        task_id = arguments.get("task_id")
+        if task_id is None:
+            return None
+
+        return (
+            {"type": "complete_task", "task_id": int(task_id)},
+            f"Confirm: mark task #{task_id} as completed? Type 'yes' or 'no'.",
+        )
+
+    if tool_name == "create_task":
+        title = arguments.get("title")
+        if not title:
+            return None
+
+        return (
+            {"type": "create_task", "title": str(title)},
+            f"Confirm: create task '{title}'? Type 'yes' or 'no'.",
+        )
+
+    return None
+
+
 async def list_mcp_tools() -> str:
     """Start the MCP Server and return its available tool metadata."""
     server_python = os.getenv("MCP_SERVER_PYTHON", sys.executable)
@@ -342,6 +375,14 @@ def main() -> None:
             decision = decide_with_llm(llm_message)
             print("LLM decision:")
             print(format_decision(decision))
+
+            pending_llm_action = pending_action_from_llm_decision(decision)
+            if pending_llm_action is not None:
+                pending_action, confirmation_message = pending_llm_action
+                print("Agent result:")
+                print(confirmation_message)
+                continue
+
             print("Agent result:")
             print(asyncio.run(execute_llm_decision(decision)))
             continue

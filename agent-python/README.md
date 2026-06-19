@@ -99,4 +99,4 @@ Answer `no` to cancel without changing data.
 
 For this step, routing is rule-based. Later, an LLM can replace this rule and choose tools from MCP metadata.
 
-The `ask-llm` command returns a JSON decision. The Agent can execute read-only decisions such as `list_tasks` and `get_task`. Write tools still require a separate confirmation flow.
+The `ask-llm` command returns a JSON decision. The Agent can execute read-only decisions such as `list_tasks` and `get_task`. Write decisions such as `create_task` and `complete_task` become pending confirmation actions before execution.

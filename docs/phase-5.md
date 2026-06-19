@@ -144,3 +144,51 @@ This teaches an important production rule:
 ```text
 Prompting helps, but runtime validation and normalization are still required.
 ```
+
+## Step 5.3: Write Decisions Become Confirmations
+
+The Agent can now accept LLM decisions for write tools, but it still does not execute them immediately.
+
+Example LLM decision:
+
+```json
+{
+  "action": "call_tool",
+  "tool_name": "complete_task",
+  "arguments": {
+    "task_id": 1
+  },
+  "requires_confirmation": true,
+  "response": null
+}
+```
+
+The Agent converts this into a pending confirmation action:
+
+```text
+Confirm: mark task #1 as completed? Type 'yes' or 'no'.
+```
+
+Only after the user answers `yes` does the Agent call the MCP `complete_task` tool.
+
+This keeps the safety boundary in the Agent runtime:
+
+```text
+LLM proposes write action.
+Agent asks user for confirmation.
+User confirms.
+Agent executes MCP tool.
+```
+
+## Later: OpenAI Tool Calling
+
+This phase currently uses an explicit JSON decision contract because it makes the Agent loop visible.
+
+Later, we can map MCP tool metadata into OpenAI tool definitions and let OpenAI return tool calls directly.
+
+Even then, the same boundary remains:
+
+```text
+The model may request a tool call.
+The Agent runtime still validates, applies safety policy, and executes the MCP tool.
+```
