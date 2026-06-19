@@ -61,6 +61,7 @@ python main.py
 Available local commands:
 
 - `tools`: start the MCP Server and list available MCP tools
+- `openai-tools`: convert selected MCP tool metadata into OpenAI function tool definitions
 - `tasks`: call the MCP `list_tasks` tool and show tasks from the Java backend
 - `ask-llm <message>`: ask OpenAI for a structured Agent decision and execute safe read-only tools
 - `exit`: quit the Agent CLI
@@ -100,3 +101,5 @@ Answer `no` to cancel without changing data.
 For this step, routing is rule-based. Later, an LLM can replace this rule and choose tools from MCP metadata.
 
 The `ask-llm` command returns a JSON decision. The Agent can execute read-only decisions such as `list_tasks` and `get_task`. Write decisions such as `create_task` and `complete_task` become pending confirmation actions before execution.
+
+The `openai-tools` command shows how MCP tool metadata can be converted into OpenAI tool definitions. This is the bridge toward automatic OpenAI tool calling.

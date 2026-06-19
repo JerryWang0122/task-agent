@@ -13,6 +13,7 @@ from openai import OpenAI
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MCP_SERVER_DIR = PROJECT_ROOT / "mcp-server"
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+AGENT_TOOL_NAMES = {"list_tasks", "get_task", "create_task", "complete_task"}
 
 
 def decide_with_llm(user_message: str) -> dict[str, object]:
@@ -73,6 +74,18 @@ def normalize_llm_decision(decision: dict[str, object]) -> dict[str, object]:
 def format_decision(decision: dict[str, object]) -> str:
     """Return a readable JSON representation of an LLM decision."""
     return json.dumps(decision, indent=2)
+
+
+def mcp_tool_to_openai_tool(tool: object) -> dict[str, object]:
+    """Convert one MCP tool definition into OpenAI's function tool shape."""
+    return {
+        "type": "function",
+        "function": {
+            "name": tool.name,
+            "description": tool.description or "",
+            "parameters": tool.inputSchema or {"type": "object", "properties": {}},
+        },
+    }
 
 
 async def execute_llm_decision(decision: dict[str, object]) -> str:
@@ -157,6 +170,28 @@ async def list_mcp_tools() -> str:
                 lines.append(f"- {tool.name}: {tool.description}")
 
             return "\n".join(lines)
+
+
+async def list_openai_tools() -> str:
+    """Return MCP tools converted into OpenAI function tool definitions."""
+    server_python = os.getenv("MCP_SERVER_PYTHON", sys.executable)
+    server_parameters = StdioServerParameters(
+        command=server_python,
+        args=["main.py"],
+        cwd=MCP_SERVER_DIR,
+    )
+
+    async with stdio_client(server_parameters) as (read_stream, write_stream):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+            tools = await session.list_tools()
+            openai_tools = [
+                mcp_tool_to_openai_tool(tool)
+                for tool in tools.tools
+                if tool.name in AGENT_TOOL_NAMES
+            ]
+
+            return json.dumps(openai_tools, indent=2)
 
 
 async def list_tasks() -> str:
@@ -320,7 +355,10 @@ def answer(user_message: str) -> str:
 
 def main() -> None:
     print("Personal Task Agent")
-    print("Type a task question, 'tools', 'tasks', 'ask-llm <message>', or 'exit' to quit.")
+    print(
+        "Type a task question, 'tools', 'openai-tools', 'tasks', "
+        "'ask-llm <message>', or 'exit' to quit."
+    )
     pending_action: dict[str, object] | None = None
 
     while True:
@@ -364,6 +402,10 @@ def main() -> None:
 
         if normalized_message == "tools":
             print(asyncio.run(list_mcp_tools()))
+            continue
+
+        if normalized_message == "openai-tools":
+            print(asyncio.run(list_openai_tools()))
             continue
 
         if normalized_message.startswith("ask-llm "):

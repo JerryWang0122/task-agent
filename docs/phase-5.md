@@ -192,3 +192,66 @@ Even then, the same boundary remains:
 The model may request a tool call.
 The Agent runtime still validates, applies safety policy, and executes the MCP tool.
 ```
+
+## Step 5.4: Convert MCP Tools To OpenAI Tools
+
+The Agent now has an `openai-tools` command.
+
+This command does not call OpenAI yet. It only shows the schema bridge between MCP and OpenAI.
+
+The flow is:
+
+```text
+Agent starts MCP Server
+  -> Agent calls MCP list_tools()
+  -> MCP returns tool names, descriptions, and input schemas
+  -> Agent converts selected tools into OpenAI function tool definitions
+```
+
+Example MCP tool metadata:
+
+```text
+Tool name: get_task
+Description: Get one task by id from the Java backend Task REST API.
+Input schema: {"task_id": "integer"}
+```
+
+OpenAI expects a function tool shape:
+
+```json
+{
+  "type": "function",
+  "function": {
+    "name": "get_task",
+    "description": "Get one task by id from the Java backend Task REST API.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "type": "integer"
+        }
+      },
+      "required": ["task_id"]
+    }
+  }
+}
+```
+
+Why this matters:
+
+```text
+MCP is the source of tool metadata.
+OpenAI tool calling needs tool metadata in OpenAI's format.
+The Agent runtime performs the conversion and still controls execution.
+```
+
+The Agent intentionally exposes only selected tools to the model:
+
+```text
+list_tasks
+get_task
+create_task
+complete_task
+```
+
+This is a safety and product-design choice. Just because an MCP Server has a tool does not mean every Agent or model should be allowed to see it.
