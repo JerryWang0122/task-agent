@@ -64,6 +64,7 @@ Available local commands:
 - `openai-tools`: convert selected MCP tool metadata into OpenAI function tool definitions
 - `tasks`: call the MCP `list_tasks` tool and show tasks from the Java backend
 - `ask-llm <message>`: ask OpenAI for a structured Agent decision and execute safe read-only tools
+- `ask-tools <message>`: ask OpenAI to choose a tool with automatic tool calling, then let the Agent runtime execute or request confirmation
 - `exit`: quit the Agent CLI
 
 The Agent also recognizes simple natural-language task listing requests, such as:
@@ -103,3 +104,5 @@ For this step, routing is rule-based. Later, an LLM can replace this rule and ch
 The `ask-llm` command returns a JSON decision. The Agent can execute read-only decisions such as `list_tasks` and `get_task`. Write decisions such as `create_task` and `complete_task` become pending confirmation actions before execution.
 
 The `openai-tools` command shows how MCP tool metadata can be converted into OpenAI tool definitions. This is the bridge toward automatic OpenAI tool calling.
+
+The `ask-tools` command uses those OpenAI tool definitions with `tool_choice="auto"`. OpenAI may request a tool call, but the Agent runtime still decides whether to execute it directly or ask for confirmation first.

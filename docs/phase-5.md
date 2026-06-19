@@ -255,3 +255,59 @@ complete_task
 ```
 
 This is a safety and product-design choice. Just because an MCP Server has a tool does not mean every Agent or model should be allowed to see it.
+
+## Step 5.5: OpenAI Automatic Tool Calling
+
+The Agent now has an `ask-tools` command.
+
+This command uses OpenAI's automatic tool calling flow:
+
+```text
+User message
+  -> Agent fetches MCP tool metadata
+  -> Agent converts MCP tools into OpenAI tool definitions
+  -> OpenAI chooses whether to request a tool call
+  -> Agent converts the OpenAI tool call into an internal decision
+  -> Agent runtime applies safety policy
+  -> Agent executes MCP tool or asks for confirmation
+```
+
+The important difference from `ask-llm` is where the tool decision comes from.
+
+`ask-llm` asks the model to return our custom JSON shape:
+
+```json
+{
+  "action": "call_tool",
+  "tool_name": "list_tasks",
+  "arguments": {}
+}
+```
+
+`ask-tools` gives OpenAI tool definitions and lets the model return an OpenAI tool call:
+
+```text
+tool_call: list_tasks({})
+```
+
+The Agent then normalizes that OpenAI tool call into the same internal decision shape used by the rest of the runtime.
+
+This means both paths share one policy layer:
+
+```text
+Read-only tools:
+  execute through MCP immediately
+
+Write tools:
+  convert to pending action
+  ask user for confirmation
+  execute through MCP only after yes
+```
+
+This is the enterprise pattern to remember:
+
+```text
+The model may choose a tool.
+The Agent runtime owns execution.
+The backend owns business rules and data.
+```

@@ -55,6 +55,72 @@ def decide_with_llm(user_message: str) -> dict[str, object]:
     return normalize_llm_decision(json.loads(content))
 
 
+async def decide_with_openai_tools(user_message: str) -> dict[str, object]:
+    """Ask OpenAI to choose from MCP-derived tools using automatic tool calling."""
+    if not os.getenv("OPENAI_API_KEY"):
+        return {
+            "action": "respond",
+            "tool_name": None,
+            "arguments": {},
+            "requires_confirmation": False,
+            "response": "OPENAI_API_KEY is not set. Export it before using ask-tools.",
+        }
+
+    openai_tools = await get_openai_tools()
+    client = OpenAI()
+    response = client.chat.completions.create(
+        model=OPENAI_MODEL,
+        tools=openai_tools,
+        tool_choice="auto",
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are a personal task Agent. Use tools when task data is needed. "
+                    "For create_task and complete_task, request the tool call; "
+                    "the Agent runtime will ask the user for confirmation before execution."
+                ),
+            },
+            {"role": "user", "content": user_message},
+        ],
+    )
+
+    message = response.choices[0].message
+    tool_calls = message.tool_calls or []
+    if not tool_calls:
+        return {
+            "action": "respond",
+            "tool_name": None,
+            "arguments": {},
+            "requires_confirmation": False,
+            "response": message.content or "I do not have a response.",
+        }
+
+    tool_call = tool_calls[0]
+    tool_name = tool_call.function.name
+    raw_arguments = tool_call.function.arguments or "{}"
+    try:
+        arguments = json.loads(raw_arguments)
+    except json.JSONDecodeError:
+        return {
+            "action": "respond",
+            "tool_name": None,
+            "arguments": {},
+            "requires_confirmation": False,
+            "response": f"OpenAI returned invalid tool arguments: {raw_arguments}",
+        }
+
+    return normalize_llm_decision(
+        {
+            "action": "call_tool",
+            "tool_name": tool_name,
+            "arguments": arguments,
+            "requires_confirmation": tool_name in {"create_task", "complete_task"},
+            "response": None,
+        }
+    )
+
+
 def normalize_llm_decision(decision: dict[str, object]) -> dict[str, object]:
     """Normalize common LLM decision shape mistakes before policy execution."""
     known_tools = {"list_tasks", "get_task", "create_task", "complete_task"}
@@ -89,7 +155,7 @@ def mcp_tool_to_openai_tool(tool: object) -> dict[str, object]:
 
 
 async def execute_llm_decision(decision: dict[str, object]) -> str:
-    """Execute safe LLM decisions while blocking write tools for now."""
+    """Execute read-only LLM decisions through MCP tools."""
     action = decision.get("action")
     if action == "respond":
         return str(decision.get("response") or "I do not have a response.")
@@ -172,8 +238,8 @@ async def list_mcp_tools() -> str:
             return "\n".join(lines)
 
 
-async def list_openai_tools() -> str:
-    """Return MCP tools converted into OpenAI function tool definitions."""
+async def get_openai_tools() -> list[dict[str, object]]:
+    """Return selected MCP tools converted into OpenAI function tool definitions."""
     server_python = os.getenv("MCP_SERVER_PYTHON", sys.executable)
     server_parameters = StdioServerParameters(
         command=server_python,
@@ -185,13 +251,16 @@ async def list_openai_tools() -> str:
         async with ClientSession(read_stream, write_stream) as session:
             await session.initialize()
             tools = await session.list_tools()
-            openai_tools = [
+            return [
                 mcp_tool_to_openai_tool(tool)
                 for tool in tools.tools
                 if tool.name in AGENT_TOOL_NAMES
             ]
 
-            return json.dumps(openai_tools, indent=2)
+
+async def list_openai_tools() -> str:
+    """Return MCP tools converted into OpenAI function tool definitions."""
+    return json.dumps(await get_openai_tools(), indent=2)
 
 
 async def list_tasks() -> str:
@@ -357,7 +426,7 @@ def main() -> None:
     print("Personal Task Agent")
     print(
         "Type a task question, 'tools', 'openai-tools', 'tasks', "
-        "'ask-llm <message>', or 'exit' to quit."
+        "'ask-llm <message>', 'ask-tools <message>', or 'exit' to quit."
     )
     pending_action: dict[str, object] | None = None
 
@@ -421,6 +490,27 @@ def main() -> None:
             pending_llm_action = pending_action_from_llm_decision(decision)
             if pending_llm_action is not None:
                 pending_action, confirmation_message = pending_llm_action
+                print("Agent result:")
+                print(confirmation_message)
+                continue
+
+            print("Agent result:")
+            print(asyncio.run(execute_llm_decision(decision)))
+            continue
+
+        if normalized_message.startswith("ask-tools "):
+            tool_message = user_message[len("ask-tools ") :].strip()
+            if not tool_message:
+                print("Please provide a message after ask-tools.")
+                continue
+
+            decision = asyncio.run(decide_with_openai_tools(tool_message))
+            print("OpenAI tool decision:")
+            print(format_decision(decision))
+
+            pending_tool_action = pending_action_from_llm_decision(decision)
+            if pending_tool_action is not None:
+                pending_action, confirmation_message = pending_tool_action
                 print("Agent result:")
                 print(confirmation_message)
                 continue
