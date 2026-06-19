@@ -17,6 +17,10 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
 AGENT_TOOL_NAMES = {"list_tasks", "get_task", "create_task", "complete_task"}
 
 
+class ToolExecutionError(Exception):
+    """Raised when an MCP tool call fails and should be shown clearly to the user."""
+
+
 def decide_with_llm(user_message: str) -> dict[str, object]:
     """Ask OpenAI for a structured decision without executing any tool."""
     if not os.getenv("OPENAI_API_KEY"):
@@ -144,6 +148,14 @@ def format_decision(decision: dict[str, object]) -> str:
     return json.dumps(decision, indent=2)
 
 
+def run_tool_command(coro: object) -> str:
+    """Run a CLI tool coroutine and convert tool failures into user-facing text."""
+    try:
+        return asyncio.run(coro)
+    except ToolExecutionError as error:
+        return str(error)
+
+
 def mcp_tool_to_openai_tool(tool: object) -> dict[str, object]:
     """Convert one MCP tool definition into OpenAI's function tool shape."""
     return {
@@ -156,6 +168,17 @@ def mcp_tool_to_openai_tool(tool: object) -> dict[str, object]:
     }
 
 
+def mcp_server_parameters() -> StdioServerParameters:
+    """Build MCP server process parameters with the Agent environment forwarded."""
+    server_python = os.getenv("MCP_SERVER_PYTHON", sys.executable)
+    return StdioServerParameters(
+        command=server_python,
+        args=["main.py"],
+        cwd=MCP_SERVER_DIR,
+        env=os.environ.copy(),
+    )
+
+
 def log_tool_call(tool_name: str, arguments: dict[str, object], status: str) -> None:
     """Print a simple tool-call audit log line."""
     timestamp = datetime.now(UTC).isoformat()
@@ -166,6 +189,15 @@ def log_tool_call(tool_name: str, arguments: dict[str, object], status: str) -> 
         f"status={status} "
         f"arguments={json.dumps(arguments, sort_keys=True)}"
     )
+
+
+def extract_tool_error_message(result: object) -> str:
+    """Extract readable text from an MCP tool error result."""
+    content_items = getattr(result, "content", []) or []
+    if content_items:
+        return str(getattr(content_items[0], "text", "Tool returned an error."))
+
+    return "Tool returned an error."
 
 
 async def execute_llm_decision(decision: dict[str, object]) -> str:
@@ -237,17 +269,15 @@ async def apply_decision_policy(decision: dict[str, object]) -> tuple[dict[str, 
     if pending_action is not None:
         return pending_action
 
-    return None, await execute_llm_decision(decision)
+    try:
+        return None, await execute_llm_decision(decision)
+    except ToolExecutionError as error:
+        return None, str(error)
 
 
 async def list_mcp_tools() -> str:
     """Start the MCP Server and return its available tool metadata."""
-    server_python = os.getenv("MCP_SERVER_PYTHON", sys.executable)
-    server_parameters = StdioServerParameters(
-        command=server_python,
-        args=["main.py"],
-        cwd=MCP_SERVER_DIR,
-    )
+    server_parameters = mcp_server_parameters()
 
     async with stdio_client(server_parameters) as (read_stream, write_stream):
         async with ClientSession(read_stream, write_stream) as session:
@@ -263,12 +293,7 @@ async def list_mcp_tools() -> str:
 
 async def get_openai_tools() -> list[dict[str, object]]:
     """Return selected MCP tools converted into OpenAI function tool definitions."""
-    server_python = os.getenv("MCP_SERVER_PYTHON", sys.executable)
-    server_parameters = StdioServerParameters(
-        command=server_python,
-        args=["main.py"],
-        cwd=MCP_SERVER_DIR,
-    )
+    server_parameters = mcp_server_parameters()
 
     async with stdio_client(server_parameters) as (read_stream, write_stream):
         async with ClientSession(read_stream, write_stream) as session:
@@ -288,12 +313,7 @@ async def list_openai_tools() -> str:
 
 async def call_mcp_tool(tool_name: str, arguments: dict[str, object]) -> object:
     """Call one MCP tool and log the execution result."""
-    server_python = os.getenv("MCP_SERVER_PYTHON", sys.executable)
-    server_parameters = StdioServerParameters(
-        command=server_python,
-        args=["main.py"],
-        cwd=MCP_SERVER_DIR,
-    )
+    server_parameters = mcp_server_parameters()
 
     log_tool_call(tool_name, arguments, "started")
     try:
@@ -301,12 +321,20 @@ async def call_mcp_tool(tool_name: str, arguments: dict[str, object]) -> object:
             async with ClientSession(read_stream, write_stream) as session:
                 await session.initialize()
                 result = await session.call_tool(tool_name, arguments=arguments)
-
-        log_tool_call(tool_name, arguments, "succeeded")
-        return result
     except Exception:
         log_tool_call(tool_name, arguments, "failed")
-        raise
+        raise ToolExecutionError(
+            f"Tool call failed: {tool_name}. Check that the Java backend is running "
+            "and that the tool arguments are valid."
+        ) from None
+
+    if getattr(result, "isError", False):
+        log_tool_call(tool_name, arguments, "failed")
+        error_message = extract_tool_error_message(result)
+        raise ToolExecutionError(f"Tool call failed: {tool_name}. {error_message}")
+
+    log_tool_call(tool_name, arguments, "succeeded")
+    return result
 
 
 async def list_tasks() -> str:
@@ -454,13 +482,13 @@ def main() -> None:
                 if action_type == "complete_task":
                     task_id = int(pending_action["task_id"])
                     pending_action = None
-                    print(asyncio.run(complete_task(task_id)))
+                    print(run_tool_command(complete_task(task_id)))
                     continue
 
                 if action_type == "create_task":
                     title = str(pending_action["title"])
                     pending_action = None
-                    print(asyncio.run(create_task(title)))
+                    print(run_tool_command(create_task(title)))
                     continue
 
                 pending_action = None
@@ -514,7 +542,7 @@ def main() -> None:
             continue
 
         if normalized_message == "tasks":
-            print(asyncio.run(list_tasks()))
+            print(run_tool_command(list_tasks()))
             continue
 
         if should_complete_task(user_message):
@@ -531,11 +559,11 @@ def main() -> None:
 
         task_id = extract_task_id(user_message)
         if task_id is not None:
-            print(asyncio.run(get_task(task_id)))
+            print(run_tool_command(get_task(task_id)))
             continue
 
         if should_list_tasks(user_message):
-            print(asyncio.run(list_tasks()))
+            print(run_tool_command(list_tasks()))
             continue
 
         print(answer(user_message))

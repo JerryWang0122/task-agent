@@ -110,3 +110,7 @@ The `ask-tools` command uses those OpenAI tool definitions with `tool_choice="re
 Both `ask-llm` and `ask-tools` now pass through the same Agent decision policy, so confirmation rules are centralized instead of duplicated per command.
 
 Every MCP business tool call now prints a simple `TOOL_CALL` log line with timestamp, tool name, status, and arguments. This gives the Agent a basic audit trail before adding production observability tools.
+
+If a business tool call fails, the Agent prints a clear message instead of crashing. For example, if the Java backend is not running, the Agent tells you to check the backend and tool arguments.
+
+The Agent forwards its environment variables to the MCP Server subprocess, so settings such as `TASK_API_BASE_URL` are honored when the Agent starts MCP tools.

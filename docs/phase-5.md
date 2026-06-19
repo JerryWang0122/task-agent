@@ -404,3 +404,41 @@ Logs are the foundation for auditing, debugging, metrics, and tracing.
 ```
 
 This is not a full production observability solution yet. Later enhancements could replace `print()` logs with structured logging, OpenTelemetry spans, LangSmith traces, or persistent audit records.
+
+## Step 5.8: Clear Tool Error Messages
+
+The Agent now converts MCP tool failures into clear user-facing messages.
+
+Before this step, if the Java backend was not running or a tool call failed, the CLI could surface a low-level exception from the MCP client or HTTP layer.
+
+Now business tool calls use a small domain-level error:
+
+```text
+ToolExecutionError
+```
+
+The flow is:
+
+```text
+call_mcp_tool()
+  -> log started
+  -> call MCP tool
+  -> if success: log succeeded and return result
+  -> if failure: log failed and raise ToolExecutionError
+```
+
+The CLI and Agent policy convert that error into a readable message:
+
+```text
+Tool call failed: list_tasks. Check that the Java backend is running and that the tool arguments are valid.
+```
+
+Why this matters:
+
+```text
+Users should not need to understand MCP internals.
+Operators still need enough information to diagnose the failure.
+The Agent should preserve the audit log even when a tool fails.
+```
+
+This is still a simple first version. Later, different error types can be separated more precisely, such as backend unavailable, validation failure, authorization failure, and not found.
