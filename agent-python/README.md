@@ -106,3 +106,5 @@ The `ask-llm` command returns a JSON decision. The Agent can execute read-only d
 The `openai-tools` command shows how MCP tool metadata can be converted into OpenAI tool definitions. This is the bridge toward automatic OpenAI tool calling.
 
 The `ask-tools` command uses those OpenAI tool definitions with `tool_choice="auto"`. OpenAI may request a tool call, but the Agent runtime still decides whether to execute it directly or ask for confirmation first.
+
+Both `ask-llm` and `ask-tools` now pass through the same Agent decision policy, so confirmation rules are centralized instead of duplicated per command.

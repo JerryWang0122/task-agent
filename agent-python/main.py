@@ -217,6 +217,15 @@ def pending_action_from_llm_decision(decision: dict[str, object]) -> tuple[dict[
     return None
 
 
+async def apply_decision_policy(decision: dict[str, object]) -> tuple[dict[str, object] | None, str]:
+    """Apply Agent safety policy to one LLM decision."""
+    pending_action = pending_action_from_llm_decision(decision)
+    if pending_action is not None:
+        return pending_action
+
+    return None, await execute_llm_decision(decision)
+
+
 async def list_mcp_tools() -> str:
     """Start the MCP Server and return its available tool metadata."""
     server_python = os.getenv("MCP_SERVER_PYTHON", sys.executable)
@@ -487,15 +496,9 @@ def main() -> None:
             print("LLM decision:")
             print(format_decision(decision))
 
-            pending_llm_action = pending_action_from_llm_decision(decision)
-            if pending_llm_action is not None:
-                pending_action, confirmation_message = pending_llm_action
-                print("Agent result:")
-                print(confirmation_message)
-                continue
-
+            pending_action, agent_result = asyncio.run(apply_decision_policy(decision))
             print("Agent result:")
-            print(asyncio.run(execute_llm_decision(decision)))
+            print(agent_result)
             continue
 
         if normalized_message.startswith("ask-tools "):
@@ -508,15 +511,9 @@ def main() -> None:
             print("OpenAI tool decision:")
             print(format_decision(decision))
 
-            pending_tool_action = pending_action_from_llm_decision(decision)
-            if pending_tool_action is not None:
-                pending_action, confirmation_message = pending_tool_action
-                print("Agent result:")
-                print(confirmation_message)
-                continue
-
+            pending_action, agent_result = asyncio.run(apply_decision_policy(decision))
             print("Agent result:")
-            print(asyncio.run(execute_llm_decision(decision)))
+            print(agent_result)
             continue
 
         if normalized_message == "tasks":

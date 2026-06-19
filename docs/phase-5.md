@@ -311,3 +311,40 @@ The model may choose a tool.
 The Agent runtime owns execution.
 The backend owns business rules and data.
 ```
+
+## Step 5.6: Unified Decision Policy Pipeline
+
+The Agent now routes both LLM decision styles through one policy function.
+
+Before this step, the CLI had similar logic in two places:
+
+```text
+ask-llm decision
+  -> check if write action needs confirmation
+  -> otherwise execute read-only tool
+
+ask-tools decision
+  -> check if write action needs confirmation
+  -> otherwise execute read-only tool
+```
+
+That duplication is risky because future safety rules could be added to one path but forgotten in the other.
+
+The Agent now uses a shared pipeline:
+
+```text
+LLM decision or OpenAI tool call
+  -> normalized internal decision
+  -> apply_decision_policy()
+  -> pending confirmation or immediate result
+```
+
+This keeps the Agent loop simpler:
+
+```text
+Decision source can vary.
+Policy should stay centralized.
+Execution should still go through MCP.
+```
+
+This prepares the project for later workflow frameworks such as LangGraph, where this same policy step can become a graph node.
