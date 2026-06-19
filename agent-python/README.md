@@ -114,3 +114,11 @@ Every MCP business tool call now prints a simple `TOOL_CALL` log line with times
 If a business tool call fails, the Agent prints a clear message instead of crashing. For example, if the Java backend is not running, the Agent tells you to check the backend and tool arguments.
 
 The Agent forwards its environment variables to the MCP Server subprocess, so settings such as `TASK_API_BASE_URL` are honored when the Agent starts MCP tools.
+
+Phase 5 intentionally keeps multiple demo commands:
+
+- `ask-llm`: shows the explicit JSON decision layer
+- `ask-tools`: shows OpenAI tool calling with MCP-derived tools
+- rule-based task commands: provide a simple comparison path while learning
+
+Later phases can consolidate these into one normal natural-language Agent entrypoint.

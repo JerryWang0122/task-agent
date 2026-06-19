@@ -442,3 +442,75 @@ The Agent should preserve the audit log even when a tool fails.
 ```
 
 This is still a simple first version. Later, different error types can be separated more precisely, such as backend unavailable, validation failure, authorization failure, and not found.
+
+## Step 5.9: Phase 5 Review
+
+Phase 5 connected the Agent to an LLM decision layer and added the first safety controls around tool execution.
+
+The main runtime path now looks like this:
+
+```text
+User message
+  -> Agent CLI
+  -> LLM decision or OpenAI tool call
+  -> normalized internal decision
+  -> apply_decision_policy()
+  -> read-only MCP execution or pending confirmation
+  -> MCP Server
+  -> Java Task API
+```
+
+What Phase 5 added:
+
+```text
+Step 5.1: OpenAI JSON decision skeleton
+Step 5.2: Execute read-only LLM decisions
+Step 5.3: Convert write decisions into confirmations
+Step 5.4: Convert MCP tool metadata into OpenAI tool definitions
+Step 5.5: Use OpenAI tool calling for tool selection
+Step 5.6: Centralize decision policy
+Step 5.7: Log MCP business tool calls
+Step 5.8: Convert tool failures into clear user-facing messages
+```
+
+How this maps to the original roadmap:
+
+```text
+Confirmation before create: done
+Confirmation before complete: done
+Confirmation before delete: not exposed yet
+Log every tool call: done for MCP business tools
+Return clear error messages: first version done
+```
+
+Delete confirmation is intentionally not implemented yet because the MCP Server does not currently expose a `delete_task` tool. This is safer for the tutorial: first learn confirmation on medium-risk actions, then add high-risk deletion later with stricter rules.
+
+Important architecture lesson:
+
+```text
+The LLM can choose or suggest a tool.
+The Agent runtime owns policy and execution.
+The MCP Server exposes selected backend capabilities.
+The Java backend owns business data and rules.
+```
+
+Current temporary scaffolding:
+
+```text
+Rule-based commands still exist for comparison and fallback.
+ask-llm shows explicit JSON decision-making.
+ask-tools shows OpenAI tool calling.
+```
+
+This is intentional for learning. In a later cleanup, the CLI can be simplified so normal user input goes through a single Agent path instead of multiple demo commands.
+
+Next phase direction:
+
+```text
+Phase 6 will improve Agent intelligence:
+overdue task queries,
+priority grouping,
+weekly workload summaries,
+vague date handling,
+and follow-up questions when details are missing.
+```
