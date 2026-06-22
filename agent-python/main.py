@@ -1,5 +1,5 @@
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 import json
 import os
 import re
@@ -14,7 +14,14 @@ from openai import OpenAI
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MCP_SERVER_DIR = PROJECT_ROOT / "mcp-server"
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
-AGENT_TOOL_NAMES = {"list_tasks", "get_task", "find_overdue_tasks", "create_task", "complete_task"}
+AGENT_TOOL_NAMES = {
+    "list_tasks",
+    "get_task",
+    "find_overdue_tasks",
+    "find_tasks_due_between",
+    "create_task",
+    "complete_task",
+}
 
 
 class ToolExecutionError(Exception):
@@ -47,8 +54,10 @@ def decide_with_llm(user_message: str) -> dict[str, object]:
                     "Use this JSON shape: "
                     '{"action":"call_tool", "tool_name":"list_tasks", '
                     '"arguments":{}, "requires_confirmation":false, "response":null}. '
-                    "Available tools are list_tasks, get_task, find_overdue_tasks, create_task, and complete_task. "
+                    "Available tools are list_tasks, get_task, find_overdue_tasks, "
+                    "find_tasks_due_between, create_task, and complete_task. "
                     "find_overdue_tasks may include an optional priority argument: LOW, MEDIUM, HIGH, or URGENT. "
+                    "find_tasks_due_between requires start_date and end_date as ISO date strings. "
                     "When calling a tool, set action to call_tool and put the tool name in tool_name. "
                     "Set requires_confirmation to true for create_task and complete_task."
                 ),
@@ -58,7 +67,7 @@ def decide_with_llm(user_message: str) -> dict[str, object]:
     )
 
     content = response.choices[0].message.content or "{}"
-    return normalize_llm_decision(json.loads(content))
+    return normalize_relative_date_decision(normalize_llm_decision(json.loads(content)), user_message)
 
 
 async def decide_with_openai_tools(user_message: str) -> dict[str, object]:
@@ -117,20 +126,30 @@ async def decide_with_openai_tools(user_message: str) -> dict[str, object]:
             "response": f"OpenAI returned invalid tool arguments: {raw_arguments}",
         }
 
-    return normalize_llm_decision(
-        {
-            "action": "call_tool",
-            "tool_name": tool_name,
-            "arguments": arguments,
-            "requires_confirmation": tool_name in {"create_task", "complete_task"},
-            "response": None,
-        }
+    return normalize_relative_date_decision(
+        normalize_llm_decision(
+            {
+                "action": "call_tool",
+                "tool_name": tool_name,
+                "arguments": arguments,
+                "requires_confirmation": tool_name in {"create_task", "complete_task"},
+                "response": None,
+            }
+        ),
+        user_message,
     )
 
 
 def normalize_llm_decision(decision: dict[str, object]) -> dict[str, object]:
     """Normalize common LLM decision shape mistakes before policy execution."""
-    known_tools = {"list_tasks", "get_task", "find_overdue_tasks", "create_task", "complete_task"}
+    known_tools = {
+        "list_tasks",
+        "get_task",
+        "find_overdue_tasks",
+        "find_tasks_due_between",
+        "create_task",
+        "complete_task",
+    }
     action = decision.get("action")
 
     if action in known_tools:
@@ -141,6 +160,26 @@ def normalize_llm_decision(decision: dict[str, object]) -> dict[str, object]:
     decision.setdefault("requires_confirmation", decision.get("tool_name") in {"create_task", "complete_task"})
     decision.setdefault("response", None)
 
+    return decision
+
+
+def normalize_relative_date_decision(
+    decision: dict[str, object],
+    user_message: str,
+) -> dict[str, object]:
+    """Make date-relative tool arguments deterministic instead of trusting the LLM clock."""
+    normalized_message = user_message.lower()
+    if decision.get("tool_name") != "find_tasks_due_between":
+        return decision
+
+    if "this week" not in normalized_message and "weekly" not in normalized_message:
+        return decision
+
+    start_date, end_date = current_week_range()
+    decision["arguments"] = {
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+    }
     return decision
 
 
@@ -228,6 +267,14 @@ async def execute_llm_decision(decision: dict[str, object]) -> str:
     if tool_name == "find_overdue_tasks":
         priority = arguments.get("priority")
         return await find_overdue_tasks(str(priority) if priority else None)
+
+    if tool_name == "find_tasks_due_between":
+        start_date = arguments.get("start_date")
+        end_date = arguments.get("end_date")
+        if start_date is None or end_date is None:
+            return "Invalid LLM decision: find_tasks_due_between requires start_date and end_date."
+
+        return await find_tasks_due_between(str(start_date), str(end_date))
 
     if tool_name in {"create_task", "complete_task"}:
         return f"LLM suggested write tool {tool_name}. Confirmation flow will be added next."
@@ -446,6 +493,77 @@ async def find_overdue_tasks_grouped_by_priority() -> str:
     return "\n".join(lines)
 
 
+def current_week_range() -> tuple[date, date]:
+    """Return Monday through Sunday for the current local week."""
+    today = date.today()
+    start_date = today - timedelta(days=today.weekday())
+    end_date = start_date + timedelta(days=6)
+    return start_date, end_date
+
+
+async def get_tasks_due_between_records(start_date: str, end_date: str) -> list[dict[str, object]]:
+    """Call the MCP find_tasks_due_between tool and return task records."""
+    result = await call_mcp_tool(
+        "find_tasks_due_between",
+        {"start_date": start_date, "end_date": end_date},
+    )
+
+    structured_content = result.structuredContent or {}
+    tasks = structured_content.get("result")
+    if tasks is None:
+        tasks = [json.loads(content.text) for content in result.content]
+
+    return tasks
+
+
+async def find_tasks_due_between(start_date: str, end_date: str) -> str:
+    """Format open tasks due between two dates."""
+    tasks = await get_tasks_due_between_records(start_date, end_date)
+
+    if not tasks:
+        return f"No open tasks due from {start_date} to {end_date}."
+
+    lines = [f"Open tasks due from {start_date} to {end_date}:"]
+    for task in tasks:
+        lines.append(format_task_line(task))
+
+    return "\n".join(lines)
+
+
+async def summarize_weekly_workload() -> str:
+    """Summarize open tasks due during the current week."""
+    start_date, end_date = current_week_range()
+    tasks = await get_tasks_due_between_records(start_date.isoformat(), end_date.isoformat())
+
+    if not tasks:
+        return f"No open tasks due this week ({start_date} to {end_date})."
+
+    priority_counts = {"URGENT": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
+    status_counts: dict[str, int] = {}
+    for task in tasks:
+        priority = str(task.get("priority"))
+        status = str(task.get("status"))
+        if priority in priority_counts:
+            priority_counts[priority] += 1
+        status_counts[status] = status_counts.get(status, 0) + 1
+
+    lines = [f"Weekly workload summary ({start_date} to {end_date}):"]
+    lines.append(f"Total open tasks due this week: {len(tasks)}")
+    lines.append(
+        "By priority: "
+        + ", ".join(f"{priority}={count}" for priority, count in priority_counts.items() if count > 0)
+    )
+    lines.append(
+        "By status: "
+        + ", ".join(f"{status}={count}" for status, count in sorted(status_counts.items()))
+    )
+    lines.append("Tasks:")
+    for task in tasks:
+        lines.append(format_task_line(task))
+
+    return "\n".join(lines)
+
+
 async def complete_task(task_id: int) -> str:
     """Call the MCP complete_task tool after the user confirms the action."""
     result = await call_mcp_tool("complete_task", {"task_id": task_id})
@@ -529,6 +647,14 @@ def should_group_overdue_tasks_by_priority(user_message: str) -> bool:
     )
 
 
+def should_summarize_weekly_workload(user_message: str) -> bool:
+    """Return True when the user asks for this week's workload."""
+    normalized_message = user_message.lower()
+    return any(phrase in normalized_message for phrase in {"this week", "weekly"}) and any(
+        word in normalized_message for word in {"task", "tasks", "workload", "due", "summary", "summarize"}
+    )
+
+
 def extract_priority(user_message: str) -> str | None:
     """Extract a supported priority word from a simple user message."""
     normalized_message = user_message.lower()
@@ -559,7 +685,7 @@ def main() -> None:
     print("Personal Task Agent")
     print(
         "Type a task question, 'tools', 'openai-tools', 'tasks', "
-        "'overdue', 'ask-llm <message>', 'ask-tools <message>', or 'exit' to quit."
+        "'overdue', 'weekly', 'ask-llm <message>', 'ask-tools <message>', or 'exit' to quit."
     )
     pending_action: dict[str, object] | None = None
 
@@ -652,6 +778,10 @@ def main() -> None:
             print(run_tool_command(find_overdue_tasks_grouped_by_priority()))
             continue
 
+        if normalized_message in {"weekly", "this week"}:
+            print(run_tool_command(summarize_weekly_workload()))
+            continue
+
         if should_complete_task(user_message):
             task_id = extract_task_id(user_message)
             pending_action = {"type": "complete_task", "task_id": task_id}
@@ -671,6 +801,10 @@ def main() -> None:
 
         if should_group_overdue_tasks_by_priority(user_message):
             print(run_tool_command(find_overdue_tasks_grouped_by_priority()))
+            continue
+
+        if should_summarize_weekly_workload(user_message):
+            print(run_tool_command(summarize_weekly_workload()))
             continue
 
         if should_find_overdue_tasks(user_message):

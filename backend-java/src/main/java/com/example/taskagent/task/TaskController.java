@@ -45,6 +45,16 @@ public class TaskController {
                 .toList();
     }
 
+    @GetMapping("/due-between")
+    public List<TaskResponse> findTasksDueBetween(
+            @RequestParam LocalDate startDate,
+            @RequestParam LocalDate endDate
+    ) {
+        return taskService.findTasksDueBetween(startDate, endDate).stream()
+                .map(TaskResponse::from)
+                .toList();
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<TaskResponse> getTask(@PathVariable Long id) {
         return taskService.getTask(id)

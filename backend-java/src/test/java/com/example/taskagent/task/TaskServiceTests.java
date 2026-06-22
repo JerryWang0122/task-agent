@@ -128,6 +128,29 @@ class TaskServiceTests {
     }
 
     @Test
+    void findTasksDueBetweenReturnsOpenTasksInDateRange() {
+        TaskJpaRepository repository = mock(TaskJpaRepository.class);
+        TaskService service = new TaskService(repository);
+        LocalDate startDate = LocalDate.of(2026, 6, 22);
+        LocalDate endDate = LocalDate.of(2026, 6, 28);
+
+        Task weeklyTask = new Task();
+        weeklyTask.setId(2L);
+        weeklyTask.setTitle("Prepare weekly report");
+        weeklyTask.setStatus(TaskStatus.IN_PROGRESS);
+        weeklyTask.setDueDate(startDate.plusDays(2));
+
+        when(repository.findByDueDateBetweenAndStatusNot(
+                startDate,
+                endDate,
+                TaskStatus.DONE,
+                Sort.by(Sort.Direction.ASC, "dueDate", "id")
+        )).thenReturn(List.of(weeklyTask));
+
+        assertThat(service.findTasksDueBetween(startDate, endDate)).containsExactly(weeklyTask);
+    }
+
+    @Test
     void deleteTaskDeletesExistingTask() {
         TaskJpaRepository repository = mock(TaskJpaRepository.class);
         TaskService service = new TaskService(repository);

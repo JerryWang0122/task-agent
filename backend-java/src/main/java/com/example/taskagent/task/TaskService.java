@@ -42,6 +42,15 @@ public class TaskService {
         );
     }
 
+    public List<Task> findTasksDueBetween(LocalDate startDate, LocalDate endDate) {
+        return taskRepository.findByDueDateBetweenAndStatusNot(
+                startDate,
+                endDate,
+                TaskStatus.DONE,
+                Sort.by(Sort.Direction.ASC, "dueDate", "id")
+        );
+    }
+
     public Task createTask(Task task) {
         OffsetDateTime now = OffsetDateTime.now();
 

@@ -72,6 +72,18 @@ class TaskControllerTests {
     }
 
     @Test
+    void findTasksDueBetweenReturnsTaskResponses() throws Exception {
+        when(taskService.findTasksDueBetween(any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(List.of(sampleTask(2L, "Prepare weekly report", TaskStatus.IN_PROGRESS)));
+
+        mockMvc.perform(get("/api/tasks/due-between?startDate=2026-06-22&endDate=2026-06-28"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(2L))
+                .andExpect(jsonPath("$[0].title").value("Prepare weekly report"))
+                .andExpect(jsonPath("$[0].status").value("IN_PROGRESS"));
+    }
+
+    @Test
     void createTaskReturnsCreatedTask() throws Exception {
         when(taskService.createTask(any(Task.class)))
                 .thenReturn(sampleTask(1L, "Review Spring Boot API design", TaskStatus.TODO));

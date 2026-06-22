@@ -7,6 +7,7 @@ The MCP Server exposes selected backend capabilities as tools for the Agent, suc
 - `list_tasks`
 - `get_task`
 - `find_overdue_tasks`
+- `find_tasks_due_between`
 - `create_task`
 - `complete_task`
 
@@ -60,6 +61,7 @@ The server exposes these tools:
 - `list_tasks`: calls `GET /api/tasks` on the Java backend
 - `get_task`: calls `GET /api/tasks/{id}` on the Java backend
 - `find_overdue_tasks`: calls `GET /api/tasks/overdue` on the Java backend, optionally with `priority`
+- `find_tasks_due_between`: calls `GET /api/tasks/due-between` on the Java backend
 - `create_task`: calls `POST /api/tasks` on the Java backend
 - `complete_task`: calls `PATCH /api/tasks/{id}/complete` on the Java backend
 
@@ -111,6 +113,7 @@ Available tools:
   Name: list_tasks
   Name: get_task
   Name: find_overdue_tasks
+  Name: find_tasks_due_between
   Name: create_task
   Name: complete_task
 list_tasks result:

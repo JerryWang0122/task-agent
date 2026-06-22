@@ -64,6 +64,7 @@ Available local commands:
 - `openai-tools`: convert selected MCP tool metadata into OpenAI function tool definitions
 - `tasks`: call the MCP `list_tasks` tool and show tasks from the Java backend
 - `overdue`: call the MCP `find_overdue_tasks` tool and show open tasks due before today
+- `weekly`: call the MCP `find_tasks_due_between` tool and summarize open tasks due this week
 - `ask-llm <message>`: ask OpenAI for a structured Agent decision and execute safe read-only tools
 - `ask-tools <message>`: ask OpenAI to choose a tool with automatic tool calling, then let the Agent runtime execute or request confirmation
 - `exit`: quit the Agent CLI
@@ -91,6 +92,14 @@ overdue
 show overdue tasks
 show high priority overdue tasks
 show overdue tasks grouped by priority
+```
+
+It can summarize this week's workload:
+
+```text
+weekly
+what tasks are due this week
+summarize my weekly workload
 ```
 
 Write operations require confirmation. To complete a task:

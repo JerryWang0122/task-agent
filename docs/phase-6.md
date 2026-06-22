@@ -174,3 +174,117 @@ The Agent can still decide how to present overdue results.
 ```
 
 That is the balance we want in enterprise Agent design: business rules stay in backend services, while the Agent handles user intent and response composition.
+
+## Step 6.3: Weekly Workload Summary
+
+### Goal
+
+The Agent can now answer questions about tasks due this week:
+
+```text
+weekly
+What tasks are due this week?
+Summarize my weekly workload.
+```
+
+### Concept
+
+This step separates date-range querying from workload summarization:
+
+```text
+Date-range query:
+  Backend capability
+
+This week calculation:
+  Agent interpretation for now
+
+Summary formatting:
+  Agent response composition
+```
+
+The backend should know how to query tasks by an explicit date range. The Agent can translate a user phrase like `this week` into concrete dates and then summarize the returned records.
+
+### Backend API
+
+The Java backend now exposes:
+
+```text
+GET /api/tasks/due-between?startDate=2026-06-22&endDate=2026-06-28
+```
+
+The range is inclusive:
+
+```text
+startDate <= dueDate <= endDate
+```
+
+The query returns open tasks only, so tasks with `DONE` status are excluded from the workload summary.
+
+The backend flow is:
+
+```text
+TaskController.findTasksDueBetween(startDate, endDate)
+  -> TaskService.findTasksDueBetween(startDate, endDate)
+  -> TaskJpaRepository.findByDueDateBetweenAndStatusNot(...)
+  -> H2 database
+```
+
+### MCP Tool
+
+The MCP Server now exposes:
+
+```text
+find_tasks_due_between
+```
+
+Input shape:
+
+```json
+{
+  "start_date": "2026-06-22",
+  "end_date": "2026-06-28"
+}
+```
+
+The MCP Server converts those Python-style parameter names into the Java REST query parameters:
+
+```text
+startDate
+endDate
+```
+
+### Agent Behavior
+
+The Agent supports:
+
+```text
+weekly
+this week
+what tasks are due this week
+summarize my weekly workload
+```
+
+For now, `this week` means Monday through Sunday of the current local week.
+
+The Agent runtime normalizes `this week` deterministically. This is important because the LLM may not know the current date, or may guess a stale date. If OpenAI chooses `find_tasks_due_between` for a message like `what tasks are due this week`, the Agent overwrites the tool arguments with the runtime-calculated current week before execution.
+
+The Agent response includes:
+
+```text
+total open tasks due this week
+counts by priority
+counts by status
+task list
+```
+
+### What This Teaches
+
+This is a small example of Agent orchestration:
+
+```text
+The backend provides a reusable date-range task query.
+The MCP Server exposes that query as an Agent tool.
+The Agent turns user language into dates and summarizes the result.
+```
+
+In a later step, vague date handling can become more robust instead of hardcoding only `this week`.

@@ -43,6 +43,15 @@ def find_overdue_tasks(priority: TaskPriority | None = None) -> list[dict[str, A
 
 
 @mcp.tool()
+def find_tasks_due_between(start_date: str, end_date: str) -> list[dict[str, Any]]:
+    """Find open tasks due between two ISO dates by calling the Java backend."""
+    params = {"startDate": start_date, "endDate": end_date}
+    response = httpx.get(f"{TASK_API_BASE_URL}/api/tasks/due-between", params=params, timeout=10.0)
+    response.raise_for_status()
+    return response.json()
+
+
+@mcp.tool()
 def create_task(
     title: str,
     description: str | None = None,

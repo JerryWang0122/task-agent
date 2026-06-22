@@ -15,4 +15,11 @@ public interface TaskJpaRepository extends JpaRepository<Task, Long> {
             TaskPriority priority,
             Sort sort
     );
+
+    List<Task> findByDueDateBetweenAndStatusNot(
+            LocalDate startDate,
+            LocalDate endDate,
+            TaskStatus status,
+            Sort sort
+    );
 }
