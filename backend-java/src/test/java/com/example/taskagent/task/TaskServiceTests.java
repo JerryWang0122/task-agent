@@ -3,6 +3,7 @@ package com.example.taskagent.task;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.Sort;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -80,6 +81,27 @@ class TaskServiceTests {
                 .thenReturn(List.of(firstTask, secondTask));
 
         assertThat(service.listTasks()).containsExactly(firstTask, secondTask);
+    }
+
+    @Test
+    void findOverdueTasksReturnsOpenTasksDueBeforeToday() {
+        TaskJpaRepository repository = mock(TaskJpaRepository.class);
+        TaskService service = new TaskService(repository);
+        LocalDate today = LocalDate.of(2026, 6, 19);
+
+        Task overdueTask = new Task();
+        overdueTask.setId(1L);
+        overdueTask.setTitle("Clean up overdue admin task");
+        overdueTask.setStatus(TaskStatus.TODO);
+        overdueTask.setDueDate(today.minusDays(1));
+
+        when(repository.findByDueDateBeforeAndStatusNot(
+                today,
+                TaskStatus.DONE,
+                Sort.by(Sort.Direction.ASC, "dueDate", "id")
+        )).thenReturn(List.of(overdueTask));
+
+        assertThat(service.findOverdueTasks(today)).containsExactly(overdueTask);
     }
 
     @Test

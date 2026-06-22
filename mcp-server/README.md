@@ -6,6 +6,7 @@ The MCP Server exposes selected backend capabilities as tools for the Agent, suc
 
 - `list_tasks`
 - `get_task`
+- `find_overdue_tasks`
 - `create_task`
 - `complete_task`
 
@@ -58,6 +59,7 @@ The server exposes these tools:
 - `health_check`: confirms the MCP Server is running
 - `list_tasks`: calls `GET /api/tasks` on the Java backend
 - `get_task`: calls `GET /api/tasks/{id}` on the Java backend
+- `find_overdue_tasks`: calls `GET /api/tasks/overdue` on the Java backend
 - `create_task`: calls `POST /api/tasks` on the Java backend
 - `complete_task`: calls `PATCH /api/tasks/{id}/complete` on the Java backend
 
@@ -108,6 +110,7 @@ Available tools:
   Name: health_check
   Name: list_tasks
   Name: get_task
+  Name: find_overdue_tasks
   Name: create_task
   Name: complete_task
 list_tasks result:

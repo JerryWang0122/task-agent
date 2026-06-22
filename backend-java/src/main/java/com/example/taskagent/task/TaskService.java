@@ -3,6 +3,7 @@ package com.example.taskagent.task;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -22,6 +23,14 @@ public class TaskService {
 
     public Optional<Task> getTask(Long id) {
         return taskRepository.findById(id);
+    }
+
+    public List<Task> findOverdueTasks(LocalDate today) {
+        return taskRepository.findByDueDateBeforeAndStatusNot(
+                today,
+                TaskStatus.DONE,
+                Sort.by(Sort.Direction.ASC, "dueDate", "id")
+        );
     }
 
     public Task createTask(Task task) {

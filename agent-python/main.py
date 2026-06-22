@@ -14,7 +14,7 @@ from openai import OpenAI
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MCP_SERVER_DIR = PROJECT_ROOT / "mcp-server"
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
-AGENT_TOOL_NAMES = {"list_tasks", "get_task", "create_task", "complete_task"}
+AGENT_TOOL_NAMES = {"list_tasks", "get_task", "find_overdue_tasks", "create_task", "complete_task"}
 
 
 class ToolExecutionError(Exception):
@@ -47,7 +47,7 @@ def decide_with_llm(user_message: str) -> dict[str, object]:
                     "Use this JSON shape: "
                     '{"action":"call_tool", "tool_name":"list_tasks", '
                     '"arguments":{}, "requires_confirmation":false, "response":null}. '
-                    "Available tools are list_tasks, get_task, create_task, and complete_task. "
+                    "Available tools are list_tasks, get_task, find_overdue_tasks, create_task, and complete_task. "
                     "When calling a tool, set action to call_tool and put the tool name in tool_name. "
                     "Set requires_confirmation to true for create_task and complete_task."
                 ),
@@ -129,7 +129,7 @@ async def decide_with_openai_tools(user_message: str) -> dict[str, object]:
 
 def normalize_llm_decision(decision: dict[str, object]) -> dict[str, object]:
     """Normalize common LLM decision shape mistakes before policy execution."""
-    known_tools = {"list_tasks", "get_task", "create_task", "complete_task"}
+    known_tools = {"list_tasks", "get_task", "find_overdue_tasks", "create_task", "complete_task"}
     action = decision.get("action")
 
     if action in known_tools:
@@ -223,6 +223,9 @@ async def execute_llm_decision(decision: dict[str, object]) -> str:
             return "Invalid LLM decision: get_task requires task_id."
 
         return await get_task(int(task_id))
+
+    if tool_name == "find_overdue_tasks":
+        return await find_overdue_tasks()
 
     if tool_name in {"create_task", "complete_task"}:
         return f"LLM suggested write tool {tool_name}. Confirmation flow will be added next."
@@ -380,6 +383,29 @@ async def get_task(task_id: int) -> str:
     )
 
 
+async def find_overdue_tasks() -> str:
+    """Call the MCP find_overdue_tasks tool and format the result for the user."""
+    result = await call_mcp_tool("find_overdue_tasks", {})
+
+    structured_content = result.structuredContent or {}
+    tasks = structured_content.get("result")
+    if tasks is None:
+        tasks = [json.loads(content.text) for content in result.content]
+
+    if not tasks:
+        return "No overdue tasks found."
+
+    lines = ["Overdue tasks from the Java backend:"]
+    for task in tasks:
+        due_date = task.get("dueDate") or "no due date"
+        lines.append(
+            f"- #{task['id']} {task['title']} "
+            f"[{task['status']}, {task['priority']}, due: {due_date}]"
+        )
+
+    return "\n".join(lines)
+
+
 async def complete_task(task_id: int) -> str:
     """Call the MCP complete_task tool after the user confirms the action."""
     result = await call_mcp_tool("complete_task", {"task_id": task_id})
@@ -447,6 +473,14 @@ def should_list_tasks(user_message: str) -> bool:
     )
 
 
+def should_find_overdue_tasks(user_message: str) -> bool:
+    """Return True when the user is asking for overdue task records."""
+    normalized_message = user_message.lower()
+    return "overdue" in normalized_message and any(
+        word in normalized_message for word in {"task", "tasks", "todo", "todos"}
+    )
+
+
 def answer(user_message: str) -> str:
     """Return a placeholder response until MCP and LLM integration are added."""
     return (
@@ -460,7 +494,7 @@ def main() -> None:
     print("Personal Task Agent")
     print(
         "Type a task question, 'tools', 'openai-tools', 'tasks', "
-        "'ask-llm <message>', 'ask-tools <message>', or 'exit' to quit."
+        "'overdue', 'ask-llm <message>', 'ask-tools <message>', or 'exit' to quit."
     )
     pending_action: dict[str, object] | None = None
 
@@ -545,6 +579,10 @@ def main() -> None:
             print(run_tool_command(list_tasks()))
             continue
 
+        if normalized_message == "overdue":
+            print(run_tool_command(find_overdue_tasks()))
+            continue
+
         if should_complete_task(user_message):
             task_id = extract_task_id(user_message)
             pending_action = {"type": "complete_task", "task_id": task_id}
@@ -560,6 +598,10 @@ def main() -> None:
         task_id = extract_task_id(user_message)
         if task_id is not None:
             print(run_tool_command(get_task(task_id)))
+            continue
+
+        if should_find_overdue_tasks(user_message):
+            print(run_tool_command(find_overdue_tasks()))
             continue
 
         if should_list_tasks(user_message):

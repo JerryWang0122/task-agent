@@ -49,6 +49,18 @@ class TaskControllerTests {
     }
 
     @Test
+    void findOverdueTasksReturnsTaskResponses() throws Exception {
+        when(taskService.findOverdueTasks(any(LocalDate.class)))
+                .thenReturn(List.of(sampleTask(3L, "Clean up overdue admin task", TaskStatus.TODO)));
+
+        mockMvc.perform(get("/api/tasks/overdue"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(3L))
+                .andExpect(jsonPath("$[0].title").value("Clean up overdue admin task"))
+                .andExpect(jsonPath("$[0].status").value("TODO"));
+    }
+
+    @Test
     void createTaskReturnsCreatedTask() throws Exception {
         when(taskService.createTask(any(Task.class)))
                 .thenReturn(sampleTask(1L, "Review Spring Boot API design", TaskStatus.TODO));

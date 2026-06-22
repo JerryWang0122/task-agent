@@ -63,6 +63,7 @@ Available local commands:
 - `tools`: start the MCP Server and list available MCP tools
 - `openai-tools`: convert selected MCP tool metadata into OpenAI function tool definitions
 - `tasks`: call the MCP `list_tasks` tool and show tasks from the Java backend
+- `overdue`: call the MCP `find_overdue_tasks` tool and show open tasks due before today
 - `ask-llm <message>`: ask OpenAI for a structured Agent decision and execute safe read-only tools
 - `ask-tools <message>`: ask OpenAI to choose a tool with automatic tool calling, then let the Agent runtime execute or request confirmation
 - `exit`: quit the Agent CLI
@@ -81,6 +82,13 @@ It can also fetch one task by id:
 task 1
 show task 1
 #1
+```
+
+It can find overdue tasks:
+
+```text
+overdue
+show overdue tasks
 ```
 
 Write operations require confirmation. To complete a task:

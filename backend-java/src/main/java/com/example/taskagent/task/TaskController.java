@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -28,6 +29,13 @@ public class TaskController {
     @GetMapping
     public List<TaskResponse> listTasks() {
         return taskService.listTasks().stream()
+                .map(TaskResponse::from)
+                .toList();
+    }
+
+    @GetMapping("/overdue")
+    public List<TaskResponse> findOverdueTasks() {
+        return taskService.findOverdueTasks(LocalDate.now()).stream()
                 .map(TaskResponse::from)
                 .toList();
     }
