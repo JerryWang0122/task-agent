@@ -34,9 +34,10 @@ def get_task(task_id: int) -> dict[str, Any]:
 
 
 @mcp.tool()
-def find_overdue_tasks() -> list[dict[str, Any]]:
-    """Find open tasks whose due date is before today by calling the Java backend."""
-    response = httpx.get(f"{TASK_API_BASE_URL}/api/tasks/overdue", timeout=10.0)
+def find_overdue_tasks(priority: TaskPriority | None = None) -> list[dict[str, Any]]:
+    """Find open overdue tasks, optionally filtered by priority, by calling the Java backend."""
+    params = {"priority": priority} if priority is not None else None
+    response = httpx.get(f"{TASK_API_BASE_URL}/api/tasks/overdue", params=params, timeout=10.0)
     response.raise_for_status()
     return response.json()
 

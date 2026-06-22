@@ -105,6 +105,29 @@ class TaskServiceTests {
     }
 
     @Test
+    void findOverdueTasksByPriorityReturnsMatchingPriorityOnly() {
+        TaskJpaRepository repository = mock(TaskJpaRepository.class);
+        TaskService service = new TaskService(repository);
+        LocalDate today = LocalDate.of(2026, 6, 19);
+
+        Task urgentTask = new Task();
+        urgentTask.setId(3L);
+        urgentTask.setTitle("Clean up overdue admin task");
+        urgentTask.setStatus(TaskStatus.TODO);
+        urgentTask.setPriority(TaskPriority.URGENT);
+        urgentTask.setDueDate(today.minusDays(1));
+
+        when(repository.findByDueDateBeforeAndStatusNotAndPriority(
+                today,
+                TaskStatus.DONE,
+                TaskPriority.URGENT,
+                Sort.by(Sort.Direction.ASC, "dueDate", "id")
+        )).thenReturn(List.of(urgentTask));
+
+        assertThat(service.findOverdueTasksByPriority(today, TaskPriority.URGENT)).containsExactly(urgentTask);
+    }
+
+    @Test
     void deleteTaskDeletesExistingTask() {
         TaskJpaRepository repository = mock(TaskJpaRepository.class);
         TaskService service = new TaskService(repository);

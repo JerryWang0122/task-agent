@@ -8,4 +8,11 @@ import java.util.List;
 
 public interface TaskJpaRepository extends JpaRepository<Task, Long> {
     List<Task> findByDueDateBeforeAndStatusNot(LocalDate dueDate, TaskStatus status, Sort sort);
+
+    List<Task> findByDueDateBeforeAndStatusNotAndPriority(
+            LocalDate dueDate,
+            TaskStatus status,
+            TaskPriority priority,
+            Sort sort
+    );
 }

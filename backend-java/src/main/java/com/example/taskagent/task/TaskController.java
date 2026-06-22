@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
@@ -34,8 +35,12 @@ public class TaskController {
     }
 
     @GetMapping("/overdue")
-    public List<TaskResponse> findOverdueTasks() {
-        return taskService.findOverdueTasks(LocalDate.now()).stream()
+    public List<TaskResponse> findOverdueTasks(@RequestParam(required = false) TaskPriority priority) {
+        List<Task> tasks = priority == null
+                ? taskService.findOverdueTasks(LocalDate.now())
+                : taskService.findOverdueTasksByPriority(LocalDate.now(), priority);
+
+        return tasks.stream()
                 .map(TaskResponse::from)
                 .toList();
     }

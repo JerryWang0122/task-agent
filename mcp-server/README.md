@@ -59,7 +59,7 @@ The server exposes these tools:
 - `health_check`: confirms the MCP Server is running
 - `list_tasks`: calls `GET /api/tasks` on the Java backend
 - `get_task`: calls `GET /api/tasks/{id}` on the Java backend
-- `find_overdue_tasks`: calls `GET /api/tasks/overdue` on the Java backend
+- `find_overdue_tasks`: calls `GET /api/tasks/overdue` on the Java backend, optionally with `priority`
 - `create_task`: calls `POST /api/tasks` on the Java backend
 - `complete_task`: calls `PATCH /api/tasks/{id}/complete` on the Java backend
 

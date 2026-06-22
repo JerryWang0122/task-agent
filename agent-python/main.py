@@ -48,6 +48,7 @@ def decide_with_llm(user_message: str) -> dict[str, object]:
                     '{"action":"call_tool", "tool_name":"list_tasks", '
                     '"arguments":{}, "requires_confirmation":false, "response":null}. '
                     "Available tools are list_tasks, get_task, find_overdue_tasks, create_task, and complete_task. "
+                    "find_overdue_tasks may include an optional priority argument: LOW, MEDIUM, HIGH, or URGENT. "
                     "When calling a tool, set action to call_tool and put the tool name in tool_name. "
                     "Set requires_confirmation to true for create_task and complete_task."
                 ),
@@ -225,7 +226,8 @@ async def execute_llm_decision(decision: dict[str, object]) -> str:
         return await get_task(int(task_id))
 
     if tool_name == "find_overdue_tasks":
-        return await find_overdue_tasks()
+        priority = arguments.get("priority")
+        return await find_overdue_tasks(str(priority) if priority else None)
 
     if tool_name in {"create_task", "complete_task"}:
         return f"LLM suggested write tool {tool_name}. Confirmation flow will be added next."
@@ -383,25 +385,63 @@ async def get_task(task_id: int) -> str:
     )
 
 
-async def find_overdue_tasks() -> str:
-    """Call the MCP find_overdue_tasks tool and format the result for the user."""
-    result = await call_mcp_tool("find_overdue_tasks", {})
+def format_task_line(task: dict[str, object]) -> str:
+    """Format one task for CLI output."""
+    due_date = task.get("dueDate") or "no due date"
+    return (
+        f"- #{task['id']} {task['title']} "
+        f"[{task['status']}, {task['priority']}, due: {due_date}]"
+    )
+
+
+async def get_overdue_task_records(priority: str | None = None) -> list[dict[str, object]]:
+    """Call the MCP find_overdue_tasks tool and return task records."""
+    arguments = {"priority": priority} if priority is not None else {}
+    result = await call_mcp_tool("find_overdue_tasks", arguments)
 
     structured_content = result.structuredContent or {}
     tasks = structured_content.get("result")
     if tasks is None:
         tasks = [json.loads(content.text) for content in result.content]
 
+    return tasks
+
+
+async def find_overdue_tasks(priority: str | None = None) -> str:
+    """Call the MCP find_overdue_tasks tool and format the result for the user."""
+    tasks = await get_overdue_task_records(priority)
+
+    if not tasks:
+        if priority is not None:
+            return f"No {priority.lower()} priority overdue tasks found."
+        return "No overdue tasks found."
+
+    if priority is not None:
+        lines = [f"{priority.title()} priority overdue tasks from the Java backend:"]
+    else:
+        lines = ["Overdue tasks from the Java backend:"]
+    for task in tasks:
+        lines.append(format_task_line(task))
+
+    return "\n".join(lines)
+
+
+async def find_overdue_tasks_grouped_by_priority() -> str:
+    """Format overdue task records by priority for the user."""
+    tasks = await get_overdue_task_records()
+
     if not tasks:
         return "No overdue tasks found."
 
-    lines = ["Overdue tasks from the Java backend:"]
-    for task in tasks:
-        due_date = task.get("dueDate") or "no due date"
-        lines.append(
-            f"- #{task['id']} {task['title']} "
-            f"[{task['status']}, {task['priority']}, due: {due_date}]"
-        )
+    lines = ["Overdue tasks grouped by priority:"]
+    for priority in ["URGENT", "HIGH", "MEDIUM", "LOW"]:
+        matching_tasks = [task for task in tasks if task.get("priority") == priority]
+        if not matching_tasks:
+            continue
+
+        lines.append(f"{priority}:")
+        for task in matching_tasks:
+            lines.append(format_task_line(task))
 
     return "\n".join(lines)
 
@@ -479,6 +519,31 @@ def should_find_overdue_tasks(user_message: str) -> bool:
     return "overdue" in normalized_message and any(
         word in normalized_message for word in {"task", "tasks", "todo", "todos"}
     )
+
+
+def should_group_overdue_tasks_by_priority(user_message: str) -> bool:
+    """Return True when the user asks to group overdue tasks by priority."""
+    normalized_message = user_message.lower()
+    return "overdue" in normalized_message and "priority" in normalized_message and any(
+        word in normalized_message for word in {"group", "grouped", "grouping"}
+    )
+
+
+def extract_priority(user_message: str) -> str | None:
+    """Extract a supported priority word from a simple user message."""
+    normalized_message = user_message.lower()
+    priorities = {
+        "urgent": "URGENT",
+        "high": "HIGH",
+        "medium": "MEDIUM",
+        "low": "LOW",
+    }
+
+    for word, priority in priorities.items():
+        if word in normalized_message:
+            return priority
+
+    return None
 
 
 def answer(user_message: str) -> str:
@@ -583,6 +648,10 @@ def main() -> None:
             print(run_tool_command(find_overdue_tasks()))
             continue
 
+        if normalized_message in {"overdue grouped", "overdue by priority"}:
+            print(run_tool_command(find_overdue_tasks_grouped_by_priority()))
+            continue
+
         if should_complete_task(user_message):
             task_id = extract_task_id(user_message)
             pending_action = {"type": "complete_task", "task_id": task_id}
@@ -600,8 +669,12 @@ def main() -> None:
             print(run_tool_command(get_task(task_id)))
             continue
 
+        if should_group_overdue_tasks_by_priority(user_message):
+            print(run_tool_command(find_overdue_tasks_grouped_by_priority()))
+            continue
+
         if should_find_overdue_tasks(user_message):
-            print(run_tool_command(find_overdue_tasks()))
+            print(run_tool_command(find_overdue_tasks(extract_priority(user_message))))
             continue
 
         if should_list_tasks(user_message):

@@ -89,6 +89,8 @@ It can find overdue tasks:
 ```text
 overdue
 show overdue tasks
+show high priority overdue tasks
+show overdue tasks grouped by priority
 ```
 
 Write operations require confirmation. To complete a task:

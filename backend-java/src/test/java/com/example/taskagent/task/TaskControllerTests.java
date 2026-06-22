@@ -61,6 +61,17 @@ class TaskControllerTests {
     }
 
     @Test
+    void findOverdueTasksCanFilterByPriority() throws Exception {
+        when(taskService.findOverdueTasksByPriority(any(LocalDate.class), any(TaskPriority.class)))
+                .thenReturn(List.of(sampleTask(3L, "Clean up overdue admin task", TaskStatus.TODO, TaskPriority.URGENT)));
+
+        mockMvc.perform(get("/api/tasks/overdue?priority=URGENT"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(3L))
+                .andExpect(jsonPath("$[0].priority").value("URGENT"));
+    }
+
+    @Test
     void createTaskReturnsCreatedTask() throws Exception {
         when(taskService.createTask(any(Task.class)))
                 .thenReturn(sampleTask(1L, "Review Spring Boot API design", TaskStatus.TODO));
@@ -91,11 +102,15 @@ class TaskControllerTests {
     }
 
     private Task sampleTask(Long id, String title, TaskStatus status) {
+        return sampleTask(id, title, status, TaskPriority.MEDIUM);
+    }
+
+    private Task sampleTask(Long id, String title, TaskStatus status, TaskPriority priority) {
         Task task = new Task();
         task.setId(id);
         task.setTitle(title);
         task.setStatus(status);
-        task.setPriority(TaskPriority.MEDIUM);
+        task.setPriority(priority);
         task.setDueDate(LocalDate.of(2026, 6, 17));
         task.setCreatedAt(OffsetDateTime.parse("2026-06-16T10:00:00+08:00"));
         task.setUpdatedAt(OffsetDateTime.parse("2026-06-16T10:00:00+08:00"));

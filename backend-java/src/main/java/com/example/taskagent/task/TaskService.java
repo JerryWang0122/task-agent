@@ -33,6 +33,15 @@ public class TaskService {
         );
     }
 
+    public List<Task> findOverdueTasksByPriority(LocalDate today, TaskPriority priority) {
+        return taskRepository.findByDueDateBeforeAndStatusNotAndPriority(
+                today,
+                TaskStatus.DONE,
+                priority,
+                Sort.by(Sort.Direction.ASC, "dueDate", "id")
+        );
+    }
+
     public Task createTask(Task task) {
         OffsetDateTime now = OffsetDateTime.now();
 
