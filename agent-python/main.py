@@ -58,6 +58,8 @@ def decide_with_llm(user_message: str) -> dict[str, object]:
                     "find_tasks_due_between, create_task, and complete_task. "
                     "find_overdue_tasks may include an optional priority argument: LOW, MEDIUM, HIGH, or URGENT. "
                     "find_tasks_due_between requires start_date and end_date as ISO date strings. "
+                    "For relative date requests like today, tomorrow, next week, or by Friday, choose "
+                    "find_tasks_due_between. The Agent runtime will calculate the exact dates. "
                     "When calling a tool, set action to call_tool and put the tool name in tool_name. "
                     "Set requires_confirmation to true for create_task and complete_task."
                 ),
@@ -92,6 +94,8 @@ async def decide_with_openai_tools(user_message: str) -> dict[str, object]:
                 "role": "system",
                 "content": (
                     "You are a personal task Agent. Use tools when task data is needed. "
+                    "For relative date requests like today, tomorrow, next week, or by Friday, "
+                    "use find_tasks_due_between. The Agent runtime will calculate the exact dates. "
                     "For create_task and complete_task, you must request the tool call. "
                     "Do not ask the user for confirmation in natural language. "
                     "The Agent runtime will ask the user for confirmation before execution."
@@ -168,14 +172,14 @@ def normalize_relative_date_decision(
     user_message: str,
 ) -> dict[str, object]:
     """Make date-relative tool arguments deterministic instead of trusting the LLM clock."""
-    normalized_message = user_message.lower()
     if decision.get("tool_name") != "find_tasks_due_between":
         return decision
 
-    if "this week" not in normalized_message and "weekly" not in normalized_message:
+    date_range = relative_date_range_from_message(user_message)
+    if date_range is None:
         return decision
 
-    start_date, end_date = current_week_range()
+    start_date, end_date, _ = date_range
     decision["arguments"] = {
         "start_date": start_date.isoformat(),
         "end_date": end_date.isoformat(),
@@ -501,6 +505,57 @@ def current_week_range() -> tuple[date, date]:
     return start_date, end_date
 
 
+def next_week_range() -> tuple[date, date]:
+    """Return Monday through Sunday for the next local week."""
+    start_date, _ = current_week_range()
+    next_start_date = start_date + timedelta(days=7)
+    return next_start_date, next_start_date + timedelta(days=6)
+
+
+def upcoming_weekday(target_weekday: int) -> date:
+    """Return the next date matching Python weekday 0=Monday through 6=Sunday."""
+    today = date.today()
+    days_until_target = (target_weekday - today.weekday()) % 7
+    return today + timedelta(days=days_until_target)
+
+
+def relative_date_range_from_message(user_message: str) -> tuple[date, date, str] | None:
+    """Convert supported relative date phrases into deterministic date ranges."""
+    normalized_message = user_message.lower()
+    today = date.today()
+
+    if "tomorrow" in normalized_message:
+        tomorrow = today + timedelta(days=1)
+        return tomorrow, tomorrow, "tomorrow"
+
+    if "today" in normalized_message:
+        return today, today, "today"
+
+    if "next week" in normalized_message:
+        start_date, end_date = next_week_range()
+        return start_date, end_date, "next week"
+
+    if "this week" in normalized_message or "weekly" in normalized_message:
+        start_date, end_date = current_week_range()
+        return start_date, end_date, "this week"
+
+    weekdays = {
+        "monday": 0,
+        "tuesday": 1,
+        "wednesday": 2,
+        "thursday": 3,
+        "friday": 4,
+        "saturday": 5,
+        "sunday": 6,
+    }
+    for weekday_name, weekday_number in weekdays.items():
+        if f"by {weekday_name}" in normalized_message:
+            end_date = upcoming_weekday(weekday_number)
+            return today, end_date, f"by {weekday_name.title()}"
+
+    return None
+
+
 async def get_tasks_due_between_records(start_date: str, end_date: str) -> list[dict[str, object]]:
     """Call the MCP find_tasks_due_between tool and return task records."""
     result = await call_mcp_tool(
@@ -524,6 +579,25 @@ async def find_tasks_due_between(start_date: str, end_date: str) -> str:
         return f"No open tasks due from {start_date} to {end_date}."
 
     lines = [f"Open tasks due from {start_date} to {end_date}:"]
+    for task in tasks:
+        lines.append(format_task_line(task))
+
+    return "\n".join(lines)
+
+
+async def find_tasks_due_for_relative_range(user_message: str) -> str:
+    """Find tasks due for a supported relative date phrase."""
+    date_range = relative_date_range_from_message(user_message)
+    if date_range is None:
+        return "I could not identify a supported date range. Try today, tomorrow, next week, or by Friday."
+
+    start_date, end_date, label = date_range
+    tasks = await get_tasks_due_between_records(start_date.isoformat(), end_date.isoformat())
+
+    if not tasks:
+        return f"No open tasks due {label} ({start_date} to {end_date})."
+
+    lines = [f"Open tasks due {label} ({start_date} to {end_date}):"]
     for task in tasks:
         lines.append(format_task_line(task))
 
@@ -655,6 +729,15 @@ def should_summarize_weekly_workload(user_message: str) -> bool:
     )
 
 
+def should_find_tasks_due_for_relative_range(user_message: str) -> bool:
+    """Return True when the user asks for tasks due in a supported relative date range."""
+    normalized_message = user_message.lower()
+    if relative_date_range_from_message(user_message) is None:
+        return False
+
+    return any(word in normalized_message for word in {"task", "tasks", "todo", "todos", "due"})
+
+
 def extract_priority(user_message: str) -> str | None:
     """Extract a supported priority word from a simple user message."""
     normalized_message = user_message.lower()
@@ -782,6 +865,10 @@ def main() -> None:
             print(run_tool_command(summarize_weekly_workload()))
             continue
 
+        if normalized_message in {"today", "tomorrow", "next week"}:
+            print(run_tool_command(find_tasks_due_for_relative_range(user_message)))
+            continue
+
         if should_complete_task(user_message):
             task_id = extract_task_id(user_message)
             pending_action = {"type": "complete_task", "task_id": task_id}
@@ -805,6 +892,10 @@ def main() -> None:
 
         if should_summarize_weekly_workload(user_message):
             print(run_tool_command(summarize_weekly_workload()))
+            continue
+
+        if should_find_tasks_due_for_relative_range(user_message):
+            print(run_tool_command(find_tasks_due_for_relative_range(user_message)))
             continue
 
         if should_find_overdue_tasks(user_message):

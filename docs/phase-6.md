@@ -288,3 +288,88 @@ The Agent turns user language into dates and summarizes the result.
 ```
 
 In a later step, vague date handling can become more robust instead of hardcoding only `this week`.
+
+## Step 6.4: Vague Date Handling
+
+### Goal
+
+The Agent can now handle more relative date phrases:
+
+```text
+tasks due today
+tasks due tomorrow
+tasks due next week
+tasks due by Friday
+```
+
+### Concept
+
+LLMs are not reliable clocks.
+
+The model may understand that the user is asking about `this week`, but it may guess the wrong actual dates. For production Agent design, deterministic facts should come from the runtime, not from the model.
+
+The rule is:
+
+```text
+LLM interprets intent.
+Agent runtime calculates dates.
+MCP executes tools.
+Backend queries data.
+```
+
+### Runtime Date Normalization
+
+The Agent now has a deterministic date parser for supported phrases:
+
+```text
+today      -> today to today
+tomorrow   -> tomorrow to tomorrow
+this week  -> current Monday to current Sunday
+weekly     -> current Monday to current Sunday
+next week  -> next Monday to next Sunday
+by Friday  -> today to upcoming Friday
+```
+
+All of these become calls to the same reusable MCP tool:
+
+```text
+find_tasks_due_between
+```
+
+Example:
+
+```text
+User: tasks due by Friday
+  -> Agent calculates start_date=today and end_date=upcoming Friday
+  -> MCP find_tasks_due_between(start_date, end_date)
+  -> Java GET /api/tasks/due-between?startDate=...&endDate=...
+```
+
+### LLM Safety Fix
+
+If OpenAI returns stale dates for a relative-date request, the Agent overwrites them before execution.
+
+Example bad model output:
+
+```json
+{
+  "tool_name": "find_tasks_due_between",
+  "arguments": {
+    "start_date": "2024-04-21",
+    "end_date": "2024-04-27"
+  }
+}
+```
+
+The Agent runtime replaces those arguments with the current calculated range before calling MCP.
+
+### What This Teaches
+
+This is a core Agent engineering pattern:
+
+```text
+Do not trust the LLM for deterministic facts.
+Normalize and validate tool arguments in runtime policy.
+```
+
+Dates are just one example. The same principle later applies to user identity, permissions, account IDs, environment, and destructive action policy.

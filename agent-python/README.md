@@ -102,6 +102,17 @@ what tasks are due this week
 summarize my weekly workload
 ```
 
+It can normalize simple vague dates into backend date-range queries:
+
+```text
+tasks due today
+tasks due tomorrow
+tasks due next week
+tasks due by Friday
+```
+
+The Agent runtime calculates these dates. The LLM may choose the tool, but the runtime owns deterministic date values.
+
 Write operations require confirmation. To complete a task:
 
 ```text
