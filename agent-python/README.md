@@ -127,6 +127,16 @@ create task Buy milk
 yes
 ```
 
+If the create request is missing the title, the Agent asks a follow-up question before confirmation:
+
+```text
+create a task for tomorrow
+What is the task title? I will set the due date to <tomorrow's date>.
+Buy milk
+Confirm: create task 'Buy milk' due <tomorrow's date>? Type 'yes' or 'no'.
+yes
+```
+
 Answer `no` to cancel without changing data.
 
 For this step, routing is rule-based. Later, an LLM can replace this rule and choose tools from MCP metadata.

@@ -373,3 +373,73 @@ Normalize and validate tool arguments in runtime policy.
 ```
 
 Dates are just one example. The same principle later applies to user identity, permissions, account IDs, environment, and destructive action policy.
+
+## Step 6.5: Follow-Up Questions
+
+### Goal
+
+The Agent should not guess missing information for write operations.
+
+Example:
+
+```text
+User: create a task for tomorrow
+```
+
+This request has a due date, but it does not have a task title. The Agent should ask a follow-up question instead of inventing a title.
+
+### Concept
+
+Follow-up questions are part of safe Agent workflow design.
+
+The rule is:
+
+```text
+If required information is missing, ask.
+If the action changes data, confirm before execution.
+```
+
+This creates a two-stage flow:
+
+```text
+User request
+  -> Agent detects missing title
+  -> Agent asks follow-up question
+  -> User provides title
+  -> Agent asks confirmation
+  -> User confirms
+  -> MCP create_task
+  -> Java backend
+```
+
+### Agent Behavior
+
+The local create-task flow now supports:
+
+```text
+create a task for tomorrow
+What is the task title? I will set the due date to 2026-06-23.
+Buy milk
+Confirm: create task 'Buy milk' due 2026-06-23? Type 'yes' or 'no'.
+yes
+```
+
+The Agent keeps a small pending follow-up state:
+
+```text
+type: create_task_missing_title
+due_date: optional ISO date
+```
+
+After the user answers, the Agent does not create the task immediately. It converts the answer into the existing pending confirmation flow.
+
+### Why This Matters
+
+This prevents two unsafe patterns:
+
+```text
+The Agent invents missing task details.
+The Agent writes data without confirmation.
+```
+
+For now, this follow-up behavior is implemented in the local rule-based create flow. A later productization step can move the same idea into the unified Agent workflow so `ask-llm`, `ask-tools`, and normal natural-language input share one follow-up system.

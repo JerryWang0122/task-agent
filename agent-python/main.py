@@ -311,9 +311,10 @@ def pending_action_from_llm_decision(decision: dict[str, object]) -> tuple[dict[
         if not title:
             return None
 
+        due_date = arguments.get("due_date") or arguments.get("dueDate")
         return (
-            {"type": "create_task", "title": str(title)},
-            f"Confirm: create task '{title}'? Type 'yes' or 'no'.",
+            {"type": "create_task", "title": str(title), "due_date": str(due_date) if due_date else None},
+            create_task_confirmation_message(str(title), str(due_date) if due_date else None),
         )
 
     return None
@@ -650,29 +651,81 @@ async def complete_task(task_id: int) -> str:
     return f"Completed task #{task['id']}: {task['title']}"
 
 
-async def create_task(title: str) -> str:
+async def create_task(title: str, due_date: str | None = None) -> str:
     """Call the MCP create_task tool after the user confirms the action."""
-    result = await call_mcp_tool("create_task", {"title": title})
+    arguments = {"title": title}
+    if due_date is not None:
+        arguments["due_date"] = due_date
+
+    result = await call_mcp_tool("create_task", arguments)
 
     structured_content = result.structuredContent or {}
     task = structured_content.get("result")
     if task is None:
         task = json.loads(result.content[0].text)
 
-    return f"Created task #{task['id']}: {task['title']}"
+    response = f"Created task #{task['id']}: {task['title']}"
+    if task.get("dueDate"):
+        response += f" due {task['dueDate']}"
+    return response
+
+
+def create_task_confirmation_message(title: str, due_date: str | None = None) -> str:
+    """Build the confirmation prompt for creating one task."""
+    if due_date is not None:
+        return f"Confirm: create task '{title}' due {due_date}? Type 'yes' or 'no'."
+
+    return f"Confirm: create task '{title}'? Type 'yes' or 'no'."
 
 
 def extract_create_task_title(user_message: str) -> str | None:
     """Extract a title from simple phrases like 'create task Buy milk'."""
-    match = re.search(r"^(?:create|add)\s+(?:a\s+)?task\s+(.+)$", user_message, re.IGNORECASE)
+    match = re.search(r"^(?:create|add)\s+(?:a\s+)?(?:task|todo)\s+(.+)$", user_message, re.IGNORECASE)
     if not match:
         return None
 
-    title = match.group(1).strip()
+    title = remove_relative_date_phrases(match.group(1)).strip()
     if not title:
         return None
 
     return title
+
+
+def remove_relative_date_phrases(text: str) -> str:
+    """Remove supported relative date phrases from a candidate task title."""
+    cleaned_text = text.strip()
+    patterns = [
+        r"\b(?:for|by|due)\s+today\b",
+        r"\b(?:for|by|due)\s+tomorrow\b",
+        r"\b(?:for|by|due)\s+next\s+week\b",
+        r"\b(?:for|by|due)\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b",
+        r"\btoday\b",
+        r"\btomorrow\b",
+        r"\bnext\s+week\b",
+    ]
+
+    for pattern in patterns:
+        cleaned_text = re.sub(pattern, " ", cleaned_text, flags=re.IGNORECASE)
+
+    return re.sub(r"\s+", " ", cleaned_text).strip(" .,-")
+
+
+def is_create_task_request(user_message: str) -> bool:
+    """Return True when the user appears to be asking to create a task."""
+    normalized_message = user_message.lower()
+    return any(word in normalized_message for word in {"create", "add"}) and any(
+        word in normalized_message for word in {"task", "todo"}
+    )
+
+
+def extract_create_task_due_date(user_message: str) -> str | None:
+    """Extract a deterministic due date from supported relative date phrases."""
+    date_range = relative_date_range_from_message(user_message)
+    if date_range is None:
+        return None
+
+    _, end_date, _ = date_range
+    return end_date.isoformat()
 
 
 def extract_task_id(user_message: str) -> int | None:
@@ -771,6 +824,7 @@ def main() -> None:
         "'overdue', 'weekly', 'ask-llm <message>', 'ask-tools <message>', or 'exit' to quit."
     )
     pending_action: dict[str, object] | None = None
+    pending_follow_up: dict[str, object] | None = None
 
     while True:
         user_message = input("> ").strip()
@@ -795,8 +849,9 @@ def main() -> None:
 
                 if action_type == "create_task":
                     title = str(pending_action["title"])
+                    due_date = pending_action.get("due_date")
                     pending_action = None
-                    print(run_tool_command(create_task(title)))
+                    print(run_tool_command(create_task(title, str(due_date) if due_date else None)))
                     continue
 
                 pending_action = None
@@ -809,6 +864,25 @@ def main() -> None:
                 continue
 
             print("Please answer 'yes' to confirm or 'no' to cancel.")
+            continue
+
+        if pending_follow_up is not None:
+            if normalized_message in {"cancel", "no", "n"}:
+                pending_follow_up = None
+                print("Cancelled. No task was changed.")
+                continue
+
+            follow_up_type = pending_follow_up["type"]
+            if follow_up_type == "create_task_missing_title":
+                title = user_message.strip()
+                due_date = pending_follow_up.get("due_date")
+                pending_follow_up = None
+                pending_action = {"type": "create_task", "title": title, "due_date": due_date}
+                print(create_task_confirmation_message(title, str(due_date) if due_date else None))
+                continue
+
+            pending_follow_up = None
+            print("Cancelled unknown follow-up request.")
             continue
 
         if normalized_message == "tools":
@@ -877,8 +951,18 @@ def main() -> None:
 
         create_title = extract_create_task_title(user_message)
         if create_title is not None:
-            pending_action = {"type": "create_task", "title": create_title}
-            print(f"Confirm: create task '{create_title}'? Type 'yes' or 'no'.")
+            due_date = extract_create_task_due_date(user_message)
+            pending_action = {"type": "create_task", "title": create_title, "due_date": due_date}
+            print(create_task_confirmation_message(create_title, due_date))
+            continue
+
+        if is_create_task_request(user_message):
+            due_date = extract_create_task_due_date(user_message)
+            pending_follow_up = {"type": "create_task_missing_title", "due_date": due_date}
+            if due_date is not None:
+                print(f"What is the task title? I will set the due date to {due_date}.")
+            else:
+                print("What is the task title?")
             continue
 
         task_id = extract_task_id(user_message)
