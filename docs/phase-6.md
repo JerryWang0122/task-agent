@@ -418,9 +418,9 @@ The local create-task flow now supports:
 
 ```text
 create a task for tomorrow
-What is the task title? I will set the due date to 2026-06-23.
+What is the task title? I will set the due date to <tomorrow's date>.
 Buy milk
-Confirm: create task 'Buy milk' due 2026-06-23? Type 'yes' or 'no'.
+Confirm: create task 'Buy milk' due <tomorrow's date>? Type 'yes' or 'no'.
 yes
 ```
 
@@ -443,3 +443,133 @@ The Agent writes data without confirmation.
 ```
 
 For now, this follow-up behavior is implemented in the local rule-based create flow. A later productization step can move the same idea into the unified Agent workflow so `ask-llm`, `ask-tools`, and normal natural-language input share one follow-up system.
+
+## Step 6.6: Responsibility Boundary Review
+
+### Goal
+
+This step reviews what Phase 6 added and where each responsibility belongs.
+
+Phase 6 added more intelligent behavior, but the important lesson is not only the features. The important lesson is how the system keeps business rules, tool boundaries, and Agent orchestration separate.
+
+### Responsibility Matrix
+
+| Capability | Backend Java | MCP Server | Python Agent |
+|---|---|---|---|
+| Overdue definition | Defines `dueDate < today` and `status != DONE` | Exposes `find_overdue_tasks` | Understands user intent like `show overdue tasks` |
+| Priority filtering | Queries overdue tasks by priority | Adds optional `priority` tool argument | Extracts `high`, `urgent`, etc. from user language |
+| Priority grouping | Not responsible for display grouping | Returns task records | Groups returned records for presentation |
+| Date-range lookup | Provides `GET /api/tasks/due-between` | Exposes `find_tasks_due_between` | Converts user phrase into date range |
+| Weekly summary | Returns open tasks in date range | Wraps backend date-range API | Calculates current week and summarizes results |
+| Vague dates | Not responsible for natural language phrases | Receives explicit ISO dates | Normalizes `today`, `tomorrow`, `next week`, `by Friday` |
+| Follow-up questions | Validates and saves task data | Executes `create_task` after called | Asks for missing title before confirmation |
+| Write confirmation | Could enforce auth/validation later | Executes selected write tool | Requires user confirmation before calling write tools |
+
+### Layer Rules
+
+Use these rules when deciding where new behavior should live:
+
+```text
+If it defines domain truth, put it in the backend.
+If it exposes selected backend capability to Agents, put it in MCP.
+If it interprets user language or coordinates steps, put it in the Agent.
+If it protects a risky action, enforce it in Agent runtime policy and later also backend authorization.
+```
+
+### Current Data Flows
+
+Overdue tasks:
+
+```text
+User: show overdue tasks
+  -> Agent detects overdue intent
+  -> MCP find_overdue_tasks
+  -> Java GET /api/tasks/overdue
+  -> TaskService.findOverdueTasks(today)
+  -> H2 database
+```
+
+Weekly workload:
+
+```text
+User: summarize my weekly workload
+  -> Agent calculates current week
+  -> MCP find_tasks_due_between(start_date, end_date)
+  -> Java GET /api/tasks/due-between
+  -> TaskService.findTasksDueBetween(startDate, endDate)
+  -> Agent summarizes returned tasks
+```
+
+Create task with follow-up:
+
+```text
+User: create a task for tomorrow
+  -> Agent detects missing title
+  -> Agent asks follow-up question
+  -> User provides title
+  -> Agent asks confirmation
+  -> User confirms
+  -> MCP create_task
+  -> Java POST /api/tasks
+```
+
+### What This Teaches
+
+Phase 6 shows how an Agent becomes more useful without becoming the owner of the business system.
+
+The Agent became smarter in these areas:
+
+```text
+intent recognition
+date normalization
+summary composition
+follow-up questions
+confirmation workflow
+```
+
+The backend remained the source of truth for:
+
+```text
+task data
+task status
+task priority
+overdue query semantics
+date-range task lookup
+task creation
+```
+
+The MCP Server remained a thin AI-facing tool layer:
+
+```text
+tool name
+tool description
+tool input schema
+backend API call
+structured tool output
+```
+
+### Productization Note
+
+The current CLI still has teaching-only paths:
+
+```text
+tasks
+overdue
+weekly
+ask-llm
+ask-tools
+rule-based natural language routing
+```
+
+That is intentional for learning. In a productized Agent, these paths should be consolidated into one normal natural-language entrypoint:
+
+```text
+User message
+  -> unified Agent workflow
+  -> deterministic runtime policy
+  -> MCP tools
+  -> backend services
+  -> final response
+```
+
+This is the point where LangGraph will become useful later: it can model follow-up questions, confirmations, retries, and tool execution as explicit workflow nodes instead of scattered CLI conditions.

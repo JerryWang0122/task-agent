@@ -21,6 +21,33 @@ agent-python/   Python Agent orchestration layer. Handles natural-language workf
 docs/           Learning notes, diagrams, and phase-by-phase explanations.
 ```
 
+## Current Learning Milestone
+
+Phase 6 focuses on improving Agent intelligence while preserving enterprise boundaries:
+
+```text
+Backend Java:
+  owns task business rules and query semantics
+
+MCP Server:
+  exposes selected backend capabilities as Agent tools
+
+Python Agent:
+  interprets user intent, normalizes dates, asks follow-up questions, and enforces confirmation
+```
+
+Examples now supported include:
+
+```text
+show overdue tasks
+show high priority overdue tasks
+summarize my weekly workload
+tasks due by Friday
+create a task for tomorrow
+```
+
+The key lesson is that the Agent becomes smarter without taking ownership of backend data or business rules.
+
 ## Phase 0 Environment
 
 This project targets Java 17 for the backend tutorial.
