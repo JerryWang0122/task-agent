@@ -58,13 +58,22 @@ export OPENAI_MODEL=gpt-4.1-mini
 python main.py
 ```
 
-Available local commands:
+The primary Phase 7 interaction style is normal natural-language input:
+
+```text
+show overdue tasks
+summarize my weekly workload
+tasks due by Friday
+create a task for tomorrow
+complete task 1
+```
+
+If `OPENAI_API_KEY` is configured, normal messages can use OpenAI tool-calling automatically. If it is not configured, the Agent falls back to local tutorial routing so the project remains runnable without an LLM key.
+
+Debug and teaching commands:
 
 - `tools`: start the MCP Server and list available MCP tools
 - `openai-tools`: convert selected MCP tool metadata into OpenAI function tool definitions
-- `tasks`: call the MCP `list_tasks` tool and show tasks from the Java backend
-- `overdue`: call the MCP `find_overdue_tasks` tool and show open tasks due before today
-- `weekly`: call the MCP `find_tasks_due_between` tool and summarize open tasks due this week
 - `ask-llm <message>`: ask OpenAI for a structured Agent decision and execute safe read-only tools
 - `ask-tools <message>`: ask OpenAI to choose a tool with automatic tool calling, then let the Agent runtime execute or request confirmation
 - `exit`: quit the Agent CLI
@@ -139,7 +148,7 @@ yes
 
 Answer `no` to cancel without changing data.
 
-For this step, routing is rule-based. Later, an LLM can replace this rule and choose tools from MCP metadata.
+Normal messages now go through a unified Agent handler. When `OPENAI_API_KEY` is set, the handler can use OpenAI tool-calling; otherwise it uses the local tutorial fallback rules.
 
 The `ask-llm` command returns a JSON decision. The Agent can execute read-only decisions such as `list_tasks` and `get_task`. Write decisions such as `create_task` and `complete_task` become pending confirmation actions before execution.
 
@@ -155,11 +164,11 @@ If a business tool call fails, the Agent prints a clear message instead of crash
 
 The Agent forwards its environment variables to the MCP Server subprocess, so settings such as `TASK_API_BASE_URL` are honored when the Agent starts MCP tools.
 
-The current CLI intentionally keeps multiple demo commands:
+The current CLI still keeps multiple demo commands:
 
 - `ask-llm`: shows the explicit JSON decision layer
 - `ask-tools`: shows OpenAI tool calling with MCP-derived tools
-- `tasks`, `overdue`, and `weekly`: provide direct tool demos
+- `tasks`, `overdue`, and `weekly`: still work as simple natural-language shortcuts
 - rule-based task commands: provide a simple comparison path while learning follow-up and confirmation
 
 These commands are useful for learning because each one exposes a different part of the Agent runtime. They are not the final product shape.

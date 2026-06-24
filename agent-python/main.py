@@ -817,11 +817,97 @@ def answer(user_message: str) -> str:
     )
 
 
+async def handle_local_agent_message(
+    user_message: str,
+) -> tuple[dict[str, object] | None, dict[str, object] | None, str]:
+    """Handle one message with the tutorial local routing fallback."""
+    normalized_message = user_message.lower()
+
+    if normalized_message == "tasks":
+        return None, None, await list_tasks()
+
+    if normalized_message == "overdue":
+        return None, None, await find_overdue_tasks()
+
+    if normalized_message in {"overdue grouped", "overdue by priority"}:
+        return None, None, await find_overdue_tasks_grouped_by_priority()
+
+    if normalized_message in {"weekly", "this week"}:
+        return None, None, await summarize_weekly_workload()
+
+    if normalized_message in {"today", "tomorrow", "next week"}:
+        return None, None, await find_tasks_due_for_relative_range(user_message)
+
+    if should_complete_task(user_message):
+        task_id = extract_task_id(user_message)
+        return (
+            {"type": "complete_task", "task_id": task_id},
+            None,
+            f"Confirm: mark task #{task_id} as completed? Type 'yes' or 'no'.",
+        )
+
+    create_title = extract_create_task_title(user_message)
+    if create_title is not None:
+        due_date = extract_create_task_due_date(user_message)
+        return (
+            {"type": "create_task", "title": create_title, "due_date": due_date},
+            None,
+            create_task_confirmation_message(create_title, due_date),
+        )
+
+    if is_create_task_request(user_message):
+        due_date = extract_create_task_due_date(user_message)
+        if due_date is not None:
+            response = f"What is the task title? I will set the due date to {due_date}."
+        else:
+            response = "What is the task title?"
+        return None, {"type": "create_task_missing_title", "due_date": due_date}, response
+
+    task_id = extract_task_id(user_message)
+    if task_id is not None:
+        return None, None, await get_task(task_id)
+
+    if should_group_overdue_tasks_by_priority(user_message):
+        return None, None, await find_overdue_tasks_grouped_by_priority()
+
+    if should_summarize_weekly_workload(user_message):
+        return None, None, await summarize_weekly_workload()
+
+    if should_find_tasks_due_for_relative_range(user_message):
+        return None, None, await find_tasks_due_for_relative_range(user_message)
+
+    if should_find_overdue_tasks(user_message):
+        return None, None, await find_overdue_tasks(extract_priority(user_message))
+
+    if should_list_tasks(user_message):
+        return None, None, await list_tasks()
+
+    return None, None, answer(user_message)
+
+
+async def handle_agent_message(
+    user_message: str,
+) -> tuple[dict[str, object] | None, dict[str, object] | None, str]:
+    """Handle one normal natural-language message through the unified Agent path."""
+    if should_group_overdue_tasks_by_priority(user_message) or should_summarize_weekly_workload(user_message):
+        return await handle_local_agent_message(user_message)
+
+    if is_create_task_request(user_message) and extract_create_task_title(user_message) is None:
+        return await handle_local_agent_message(user_message)
+
+    if os.getenv("OPENAI_API_KEY"):
+        decision = await decide_with_openai_tools(user_message)
+        pending_action, result = await apply_decision_policy(decision)
+        return pending_action, None, result
+
+    return await handle_local_agent_message(user_message)
+
+
 def main() -> None:
     print("Personal Task Agent")
     print(
-        "Type a task question, 'tools', 'openai-tools', 'tasks', "
-        "'overdue', 'weekly', 'ask-llm <message>', 'ask-tools <message>', or 'exit' to quit."
+        "Type a task request, 'tools', 'openai-tools', 'ask-llm <message>', "
+        "'ask-tools <message>', or 'exit' to quit."
     )
     pending_action: dict[str, object] | None = None
     pending_follow_up: dict[str, object] | None = None
@@ -923,74 +1009,13 @@ def main() -> None:
             print(agent_result)
             continue
 
-        if normalized_message == "tasks":
-            print(run_tool_command(list_tasks()))
+        try:
+            pending_action, pending_follow_up, agent_result = asyncio.run(handle_agent_message(user_message))
+        except ToolExecutionError as error:
+            print(str(error))
             continue
 
-        if normalized_message == "overdue":
-            print(run_tool_command(find_overdue_tasks()))
-            continue
-
-        if normalized_message in {"overdue grouped", "overdue by priority"}:
-            print(run_tool_command(find_overdue_tasks_grouped_by_priority()))
-            continue
-
-        if normalized_message in {"weekly", "this week"}:
-            print(run_tool_command(summarize_weekly_workload()))
-            continue
-
-        if normalized_message in {"today", "tomorrow", "next week"}:
-            print(run_tool_command(find_tasks_due_for_relative_range(user_message)))
-            continue
-
-        if should_complete_task(user_message):
-            task_id = extract_task_id(user_message)
-            pending_action = {"type": "complete_task", "task_id": task_id}
-            print(f"Confirm: mark task #{task_id} as completed? Type 'yes' or 'no'.")
-            continue
-
-        create_title = extract_create_task_title(user_message)
-        if create_title is not None:
-            due_date = extract_create_task_due_date(user_message)
-            pending_action = {"type": "create_task", "title": create_title, "due_date": due_date}
-            print(create_task_confirmation_message(create_title, due_date))
-            continue
-
-        if is_create_task_request(user_message):
-            due_date = extract_create_task_due_date(user_message)
-            pending_follow_up = {"type": "create_task_missing_title", "due_date": due_date}
-            if due_date is not None:
-                print(f"What is the task title? I will set the due date to {due_date}.")
-            else:
-                print("What is the task title?")
-            continue
-
-        task_id = extract_task_id(user_message)
-        if task_id is not None:
-            print(run_tool_command(get_task(task_id)))
-            continue
-
-        if should_group_overdue_tasks_by_priority(user_message):
-            print(run_tool_command(find_overdue_tasks_grouped_by_priority()))
-            continue
-
-        if should_summarize_weekly_workload(user_message):
-            print(run_tool_command(summarize_weekly_workload()))
-            continue
-
-        if should_find_tasks_due_for_relative_range(user_message):
-            print(run_tool_command(find_tasks_due_for_relative_range(user_message)))
-            continue
-
-        if should_find_overdue_tasks(user_message):
-            print(run_tool_command(find_overdue_tasks(extract_priority(user_message))))
-            continue
-
-        if should_list_tasks(user_message):
-            print(run_tool_command(list_tasks()))
-            continue
-
-        print(answer(user_message))
+        print(agent_result)
 
 
 if __name__ == "__main__":
