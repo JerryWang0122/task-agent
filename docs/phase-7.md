@@ -326,3 +326,148 @@ handle_pending_follow_up
 ```
 
 That will make the CLI loop even smaller and prepare the code for LangGraph nodes.
+
+## Step 7.3: Extract Pending Workflow Handlers
+
+### Goal
+
+Step 7.2 introduced `AgentState`.
+
+Step 7.3 moves the pending workflow logic out of the CLI loop and into dedicated handler functions.
+
+Before this step, the CLI loop directly handled:
+
+```text
+waiting for yes/no confirmation
+waiting for a missing task title
+turning a follow-up answer into a pending confirmation
+```
+
+That made the main loop responsible for too many workflow details.
+
+### Files We Touched
+
+- `agent-python/main.py`: adds pending workflow handler functions.
+- `agent-python/README.md`: explains that pending workflows now have explicit handlers.
+- `docs/phase-7.md`: records how pending handlers map to future workflow nodes.
+
+### Concept
+
+Once an Agent has state, the next question is:
+
+```text
+Who handles each state?
+```
+
+In a graph workflow, each state often maps to a node or edge.
+
+For our manual version, we now have two handlers:
+
+```python
+handle_pending_action(state, user_message)
+handle_pending_follow_up(state, user_message)
+```
+
+These handlers are responsible for state transitions.
+
+### Implementation
+
+`handle_pending_action` handles confirmation replies:
+
+```text
+yes / y / confirm
+  -> execute pending write tool
+  -> clear pending_action
+
+no / n / cancel
+  -> clear pending_action
+  -> do not call tool
+
+anything else
+  -> ask the user to answer yes or no
+```
+
+`handle_pending_follow_up` handles missing information replies:
+
+```text
+cancel / no / n
+  -> clear pending_follow_up
+  -> do not change data
+
+task title text
+  -> clear pending_follow_up
+  -> create pending_action
+  -> ask for confirmation
+```
+
+The CLI loop now delegates to these handlers:
+
+```python
+if state.pending_action is not None:
+    print(handle_pending_action(state, user_message))
+    continue
+
+if state.pending_follow_up is not None:
+    print(handle_pending_follow_up(state, user_message))
+    continue
+```
+
+### Why This Matters
+
+This change makes the workflow shape easier to see:
+
+```text
+normal message handler
+pending follow-up handler
+pending action handler
+```
+
+That is close to how we will think about LangGraph nodes later:
+
+```text
+Intent Node
+Follow-up Node
+Confirmation Node
+Tool Execution Node
+Response Node
+```
+
+The code is still simple Python, but the architecture is becoming graph-shaped.
+
+### How To Run Or Test
+
+Run a syntax check:
+
+```bash
+cd agent-python
+python -m py_compile main.py
+```
+
+You can test the handler behavior without starting the backend by checking the follow-up-to-confirmation transition:
+
+```text
+create a task for tomorrow
+Buy milk
+```
+
+Expected result:
+
+```text
+The first message creates pending_follow_up.
+The second message clears pending_follow_up and creates pending_action.
+The Agent asks for confirmation.
+```
+
+### What You Learned
+
+You learned that state and state handlers are separate ideas.
+
+`AgentState` stores what the Agent is waiting for.
+
+The pending handlers decide what to do with the next user message.
+
+### Next Step
+
+Next, we can make normal message output richer by returning a small result object instead of raw tuples.
+
+That will reduce positional tuple mistakes and move us closer to typed workflow transitions.

@@ -912,6 +912,60 @@ async def handle_agent_message(
     return await handle_local_agent_message(user_message)
 
 
+def handle_pending_action(state: AgentState, user_message: str) -> str:
+    """Handle a user reply while the Agent waits for write confirmation."""
+    normalized_message = user_message.lower()
+    pending_action = state.pending_action
+    if pending_action is None:
+        return "No pending action to handle."
+
+    if normalized_message in {"yes", "y", "confirm"}:
+        action_type = pending_action["type"]
+
+        if action_type == "complete_task":
+            task_id = int(pending_action["task_id"])
+            state.pending_action = None
+            return run_tool_command(complete_task(task_id))
+
+        if action_type == "create_task":
+            title = str(pending_action["title"])
+            due_date = pending_action.get("due_date")
+            state.pending_action = None
+            return run_tool_command(create_task(title, str(due_date) if due_date else None))
+
+        state.pending_action = None
+        return "Cancelled unknown pending action."
+
+    if normalized_message in {"no", "n", "cancel"}:
+        state.pending_action = None
+        return "Cancelled. No task was changed."
+
+    return "Please answer 'yes' to confirm or 'no' to cancel."
+
+
+def handle_pending_follow_up(state: AgentState, user_message: str) -> str:
+    """Handle a user reply while the Agent waits for missing information."""
+    normalized_message = user_message.lower()
+    pending_follow_up = state.pending_follow_up
+    if pending_follow_up is None:
+        return "No pending follow-up to handle."
+
+    if normalized_message in {"cancel", "no", "n"}:
+        state.pending_follow_up = None
+        return "Cancelled. No task was changed."
+
+    follow_up_type = pending_follow_up["type"]
+    if follow_up_type == "create_task_missing_title":
+        title = user_message.strip()
+        due_date = pending_follow_up.get("due_date")
+        state.pending_follow_up = None
+        state.pending_action = {"type": "create_task", "title": title, "due_date": due_date}
+        return create_task_confirmation_message(title, str(due_date) if due_date else None)
+
+    state.pending_follow_up = None
+    return "Cancelled unknown follow-up request."
+
+
 def main() -> None:
     print("Personal Task Agent")
     print(
@@ -932,51 +986,11 @@ def main() -> None:
             continue
 
         if state.pending_action is not None:
-            if normalized_message in {"yes", "y", "confirm"}:
-                action_type = state.pending_action["type"]
-
-                if action_type == "complete_task":
-                    task_id = int(state.pending_action["task_id"])
-                    state.pending_action = None
-                    print(run_tool_command(complete_task(task_id)))
-                    continue
-
-                if action_type == "create_task":
-                    title = str(state.pending_action["title"])
-                    due_date = state.pending_action.get("due_date")
-                    state.pending_action = None
-                    print(run_tool_command(create_task(title, str(due_date) if due_date else None)))
-                    continue
-
-                state.pending_action = None
-                print("Cancelled unknown pending action.")
-                continue
-
-            if normalized_message in {"no", "n", "cancel"}:
-                state.pending_action = None
-                print("Cancelled. No task was changed.")
-                continue
-
-            print("Please answer 'yes' to confirm or 'no' to cancel.")
+            print(handle_pending_action(state, user_message))
             continue
 
         if state.pending_follow_up is not None:
-            if normalized_message in {"cancel", "no", "n"}:
-                state.pending_follow_up = None
-                print("Cancelled. No task was changed.")
-                continue
-
-            follow_up_type = state.pending_follow_up["type"]
-            if follow_up_type == "create_task_missing_title":
-                title = user_message.strip()
-                due_date = state.pending_follow_up.get("due_date")
-                state.pending_follow_up = None
-                state.pending_action = {"type": "create_task", "title": title, "due_date": due_date}
-                print(create_task_confirmation_message(title, str(due_date) if due_date else None))
-                continue
-
-            state.pending_follow_up = None
-            print("Cancelled unknown follow-up request.")
+            print(handle_pending_follow_up(state, user_message))
             continue
 
         if normalized_message == "tools":
