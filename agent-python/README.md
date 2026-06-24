@@ -154,6 +154,8 @@ The CLI keeps workflow state in an `AgentState` object. For now it tracks pendin
 
 Pending workflows are handled by dedicated functions: `handle_pending_action` for confirmation replies and `handle_pending_follow_up` for missing-information replies. This keeps the CLI loop focused on routing messages instead of owning every state transition.
 
+Normal message handling now returns an `AgentTurnResult` object with named fields for `response`, `pending_action`, and `pending_follow_up`. This avoids positional tuple mistakes and makes future workflow transitions easier to model.
+
 The `ask-llm` command returns a JSON decision. The Agent can execute read-only decisions such as `list_tasks` and `get_task`. Write decisions such as `create_task` and `complete_task` become pending confirmation actions before execution.
 
 The `openai-tools` command shows how MCP tool metadata can be converted into OpenAI tool definitions. This is the bridge toward automatic OpenAI tool calling.

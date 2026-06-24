@@ -471,3 +471,136 @@ The pending handlers decide what to do with the next user message.
 Next, we can make normal message output richer by returning a small result object instead of raw tuples.
 
 That will reduce positional tuple mistakes and move us closer to typed workflow transitions.
+
+## Step 7.4: Introduce AgentTurnResult
+
+### Goal
+
+Step 7.4 replaces the normal-message raw tuple result with an explicit result object.
+
+Before this step, `handle_agent_message` and `handle_local_agent_message` returned:
+
+```python
+(pending_action, pending_follow_up, response)
+```
+
+That works, but it is easy to accidentally put values in the wrong position.
+
+This already happened once during Step 7.1 when a follow-up value was placed where a pending action belonged.
+
+### Files We Touched
+
+- `agent-python/main.py`: adds `AgentTurnResult` and uses it for normal message handling.
+- `agent-python/README.md`: documents that Agent turns now return a named result object.
+- `docs/phase-7.md`: explains why named transition results are safer than positional tuples.
+
+### Concept
+
+An Agent turn is one pass through the runtime:
+
+```text
+user message
+  -> runtime decision
+  -> optional pending state update
+  -> user-facing response
+```
+
+That result has named fields:
+
+```text
+response
+pending_action
+pending_follow_up
+```
+
+Using a named result object makes the workflow easier to read and safer to change.
+
+### Implementation
+
+The Agent now has:
+
+```python
+@dataclass
+class AgentTurnResult:
+    response: str
+    pending_action: dict[str, object] | None = None
+    pending_follow_up: dict[str, object] | None = None
+```
+
+Local and unified message handlers now return `AgentTurnResult` instead of a three-value tuple.
+
+Example:
+
+```python
+return AgentTurnResult(
+    response="What is the task title?",
+    pending_follow_up={"type": "create_task_missing_title", "due_date": due_date},
+)
+```
+
+The CLI loop now applies the result by name:
+
+```python
+turn_result = asyncio.run(handle_agent_message(user_message))
+state.pending_action = turn_result.pending_action
+state.pending_follow_up = turn_result.pending_follow_up
+print(turn_result.response)
+```
+
+### Why This Matters
+
+This is a small type-safety improvement, but it teaches an important enterprise Agent pattern.
+
+As workflows grow, transitions should have explicit shapes.
+
+Compare:
+
+```python
+return None, {"type": "create_task_missing_title"}, response
+```
+
+with:
+
+```python
+return AgentTurnResult(
+    response=response,
+    pending_follow_up={"type": "create_task_missing_title"},
+)
+```
+
+The second version is easier to review, test, and later map into LangGraph state updates.
+
+### How To Run Or Test
+
+Run a syntax check:
+
+```bash
+cd agent-python
+python -m py_compile main.py
+```
+
+You can test without the backend by checking a missing-title create request:
+
+```text
+create a task for tomorrow
+```
+
+Expected runtime result:
+
+```text
+response: asks for the task title
+pending_follow_up: create_task_missing_title
+pending_action: none
+```
+
+### What You Learned
+
+You learned why Agent workflow transitions should use named result objects instead of positional tuples.
+
+This prepares the code for stronger typing and future graph state updates.
+
+### Next Step
+
+Next, we can introduce explicit action/follow-up types instead of plain dictionaries.
+
+That would make `pending_action["type"]` and `pending_follow_up["type"]` safer and easier to test.
