@@ -174,3 +174,155 @@ pending_follow_up
 ```
 
 with a clearer Agent workflow state object before introducing LangGraph.
+
+## Step 7.2: Extract Workflow State
+
+### Goal
+
+Step 7.1 gave the Agent one main message entrypoint.
+
+Step 7.2 makes the Agent's workflow state explicit.
+
+Before this step, the CLI loop tracked state with two loose variables:
+
+```text
+pending_action
+pending_follow_up
+```
+
+That worked, but it hid an important Agent concept: a conversational Agent is not just a function call. It often waits across turns.
+
+Examples:
+
+```text
+User: create a task for tomorrow
+Agent: What is the task title?
+
+User: Buy milk
+Agent: Confirm: create task 'Buy milk' due tomorrow?
+
+User: yes
+Agent: Created task #5: Buy milk
+```
+
+The Agent has to remember what it is waiting for between messages.
+
+### Files We Touched
+
+- `agent-python/main.py`: adds `AgentState` and updates the CLI loop to store pending workflow state there.
+- `agent-python/README.md`: explains that the Agent runtime now has explicit workflow state.
+- `docs/phase-7.md`: records why explicit state matters before LangGraph.
+
+### Concept
+
+Enterprise Agent workflows are state machines.
+
+A simple request may finish in one turn:
+
+```text
+User asks for overdue tasks
+  -> Agent calls tool
+  -> Agent responds
+```
+
+A safer write workflow takes multiple turns:
+
+```text
+User asks to create task
+  -> Agent may ask follow-up question
+  -> Agent waits for missing information
+  -> Agent asks for confirmation
+  -> Agent waits for yes/no
+  -> Agent executes tool
+  -> Agent responds
+```
+
+The important learning point is that `pending_action` and `pending_follow_up` are not random variables. They are workflow state.
+
+### Implementation
+
+The Agent now has a small dataclass:
+
+```python
+@dataclass
+class AgentState:
+    pending_action: dict[str, object] | None = None
+    pending_follow_up: dict[str, object] | None = None
+```
+
+The CLI loop now creates one state object:
+
+```python
+state = AgentState()
+```
+
+Then it reads and writes:
+
+```python
+state.pending_action
+state.pending_follow_up
+```
+
+instead of standalone local variables.
+
+This does not change behavior yet. It changes the structure so future workflow steps have a clear place to live.
+
+### Why This Comes Before LangGraph
+
+LangGraph is useful when the workflow has nodes and state.
+
+Before adding LangGraph, we should be able to name the state ourselves:
+
+```text
+No pending state
+Waiting for follow-up answer
+Waiting for confirmation
+Executing tool
+Returning final answer
+```
+
+`AgentState` is the simple, manual version of that idea.
+
+Later, LangGraph can manage the same state transitions more formally.
+
+### How To Run Or Test
+
+Run a syntax check:
+
+```bash
+cd agent-python
+python -m py_compile main.py
+```
+
+You can also test a stateful flow in the CLI:
+
+```text
+create a task for tomorrow
+Buy milk
+yes
+```
+
+Expected behavior:
+
+```text
+Agent asks for title
+Agent asks for confirmation
+Agent creates the task only after yes
+```
+
+### What You Learned
+
+You learned that Agent runtime state should be explicit.
+
+This is the bridge from a simple CLI loop to a graph-based workflow engine.
+
+### Next Step
+
+Next, we can make workflow transitions explicit with helper functions such as:
+
+```text
+handle_pending_action
+handle_pending_follow_up
+```
+
+That will make the CLI loop even smaller and prepare the code for LangGraph nodes.

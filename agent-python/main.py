@@ -1,4 +1,5 @@
 import asyncio
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 import json
 import os
@@ -26,6 +27,14 @@ AGENT_TOOL_NAMES = {
 
 class ToolExecutionError(Exception):
     """Raised when an MCP tool call fails and should be shown clearly to the user."""
+
+
+@dataclass
+class AgentState:
+    """Track the Agent workflow state between CLI messages."""
+
+    pending_action: dict[str, object] | None = None
+    pending_follow_up: dict[str, object] | None = None
 
 
 def decide_with_llm(user_message: str) -> dict[str, object]:
@@ -909,8 +918,7 @@ def main() -> None:
         "Type a task request, 'tools', 'openai-tools', 'ask-llm <message>', "
         "'ask-tools <message>', or 'exit' to quit."
     )
-    pending_action: dict[str, object] | None = None
-    pending_follow_up: dict[str, object] | None = None
+    state = AgentState()
 
     while True:
         user_message = input("> ").strip()
@@ -923,51 +931,51 @@ def main() -> None:
         if not user_message:
             continue
 
-        if pending_action is not None:
+        if state.pending_action is not None:
             if normalized_message in {"yes", "y", "confirm"}:
-                action_type = pending_action["type"]
+                action_type = state.pending_action["type"]
 
                 if action_type == "complete_task":
-                    task_id = int(pending_action["task_id"])
-                    pending_action = None
+                    task_id = int(state.pending_action["task_id"])
+                    state.pending_action = None
                     print(run_tool_command(complete_task(task_id)))
                     continue
 
                 if action_type == "create_task":
-                    title = str(pending_action["title"])
-                    due_date = pending_action.get("due_date")
-                    pending_action = None
+                    title = str(state.pending_action["title"])
+                    due_date = state.pending_action.get("due_date")
+                    state.pending_action = None
                     print(run_tool_command(create_task(title, str(due_date) if due_date else None)))
                     continue
 
-                pending_action = None
+                state.pending_action = None
                 print("Cancelled unknown pending action.")
                 continue
 
             if normalized_message in {"no", "n", "cancel"}:
-                pending_action = None
+                state.pending_action = None
                 print("Cancelled. No task was changed.")
                 continue
 
             print("Please answer 'yes' to confirm or 'no' to cancel.")
             continue
 
-        if pending_follow_up is not None:
+        if state.pending_follow_up is not None:
             if normalized_message in {"cancel", "no", "n"}:
-                pending_follow_up = None
+                state.pending_follow_up = None
                 print("Cancelled. No task was changed.")
                 continue
 
-            follow_up_type = pending_follow_up["type"]
+            follow_up_type = state.pending_follow_up["type"]
             if follow_up_type == "create_task_missing_title":
                 title = user_message.strip()
-                due_date = pending_follow_up.get("due_date")
-                pending_follow_up = None
-                pending_action = {"type": "create_task", "title": title, "due_date": due_date}
+                due_date = state.pending_follow_up.get("due_date")
+                state.pending_follow_up = None
+                state.pending_action = {"type": "create_task", "title": title, "due_date": due_date}
                 print(create_task_confirmation_message(title, str(due_date) if due_date else None))
                 continue
 
-            pending_follow_up = None
+            state.pending_follow_up = None
             print("Cancelled unknown follow-up request.")
             continue
 
@@ -989,7 +997,7 @@ def main() -> None:
             print("LLM decision:")
             print(format_decision(decision))
 
-            pending_action, agent_result = asyncio.run(apply_decision_policy(decision))
+            state.pending_action, agent_result = asyncio.run(apply_decision_policy(decision))
             print("Agent result:")
             print(agent_result)
             continue
@@ -1004,13 +1012,13 @@ def main() -> None:
             print("OpenAI tool decision:")
             print(format_decision(decision))
 
-            pending_action, agent_result = asyncio.run(apply_decision_policy(decision))
+            state.pending_action, agent_result = asyncio.run(apply_decision_policy(decision))
             print("Agent result:")
             print(agent_result)
             continue
 
         try:
-            pending_action, pending_follow_up, agent_result = asyncio.run(handle_agent_message(user_message))
+            state.pending_action, state.pending_follow_up, agent_result = asyncio.run(handle_agent_message(user_message))
         except ToolExecutionError as error:
             print(str(error))
             continue

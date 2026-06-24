@@ -150,6 +150,8 @@ Answer `no` to cancel without changing data.
 
 Normal messages now go through a unified Agent handler. When `OPENAI_API_KEY` is set, the handler can use OpenAI tool-calling; otherwise it uses the local tutorial fallback rules.
 
+The CLI keeps workflow state in an `AgentState` object. For now it tracks pending follow-up questions and pending confirmation actions. This makes the stateful Agent flow explicit before moving to a graph-based workflow.
+
 The `ask-llm` command returns a JSON decision. The Agent can execute read-only decisions such as `list_tasks` and `get_task`. Write decisions such as `create_task` and `complete_task` become pending confirmation actions before execution.
 
 The `openai-tools` command shows how MCP tool metadata can be converted into OpenAI tool definitions. This is the bridge toward automatic OpenAI tool calling.
