@@ -155,10 +155,13 @@ If a business tool call fails, the Agent prints a clear message instead of crash
 
 The Agent forwards its environment variables to the MCP Server subprocess, so settings such as `TASK_API_BASE_URL` are honored when the Agent starts MCP tools.
 
-Phase 5 intentionally keeps multiple demo commands:
+The current CLI intentionally keeps multiple demo commands:
 
 - `ask-llm`: shows the explicit JSON decision layer
 - `ask-tools`: shows OpenAI tool calling with MCP-derived tools
-- rule-based task commands: provide a simple comparison path while learning
+- `tasks`, `overdue`, and `weekly`: provide direct tool demos
+- rule-based task commands: provide a simple comparison path while learning follow-up and confirmation
 
-Later phases can consolidate these into one normal natural-language Agent entrypoint.
+These commands are useful for learning because each one exposes a different part of the Agent runtime. They are not the final product shape.
+
+Phase 7 should consolidate these into one normal natural-language Agent entrypoint with shared decision policy, follow-up state, confirmation state, and tool execution.

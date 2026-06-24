@@ -573,3 +573,175 @@ User message
 ```
 
 This is the point where LangGraph will become useful later: it can model follow-up questions, confirmations, retries, and tool execution as explicit workflow nodes instead of scattered CLI conditions.
+
+## Step 6.7: Phase 6 Review And Cleanup Notes
+
+### Goal
+
+This step closes Phase 6 by separating what is now a real system capability from what is still tutorial scaffolding.
+
+Phase 6 started with simple task queries and ended with a more Agent-like runtime:
+
+```text
+understand task intent
+choose or normalize tool arguments
+call MCP tools
+summarize results
+ask follow-up questions
+require confirmation before writes
+```
+
+### Capabilities Added In Phase 6
+
+Backend Java capabilities:
+
+```text
+GET /api/tasks/overdue
+GET /api/tasks/overdue?priority=HIGH
+GET /api/tasks/due-between?startDate=...&endDate=...
+```
+
+MCP tools:
+
+```text
+find_overdue_tasks(priority=None)
+find_tasks_due_between(start_date, end_date)
+```
+
+Agent behaviors:
+
+```text
+show overdue tasks
+show high priority overdue tasks
+show overdue tasks grouped by priority
+weekly workload summary
+tasks due today / tomorrow / next week / by Friday
+create task follow-up when title is missing
+runtime normalization for relative dates
+confirmation before create and complete
+```
+
+### What Is Production-Relevant
+
+These ideas should survive into a productized Agent:
+
+```text
+Backend owns domain rules.
+MCP exposes selected capabilities with schemas.
+Agent runtime validates and normalizes tool arguments.
+Write actions require confirmation.
+Missing required information triggers follow-up questions.
+LLM output is treated as a suggestion, not as trusted execution state.
+```
+
+These are the architectural patterns we want to keep.
+
+### What Is Tutorial Scaffolding
+
+These pieces exist mainly to make the learning process visible:
+
+```text
+separate commands: tasks, overdue, weekly
+ask-llm as a JSON decision demo
+ask-tools as an OpenAI tool-calling demo
+rule-based routing helpers
+manual CLI pending_action and pending_follow_up state
+stdout TOOL_CALL logs
+stdio subprocess MCP startup
+```
+
+They are not wrong, but they are not the final product shape.
+
+### Cleanup Direction For Phase 7
+
+Phase 7 should consolidate the teaching paths into one workflow:
+
+```text
+User message
+  -> classify / plan
+  -> normalize deterministic facts
+  -> decide whether a follow-up is needed
+  -> decide whether confirmation is needed
+  -> call MCP tool
+  -> produce final response
+```
+
+The first cleanup target should be the Agent entrypoint.
+
+Current teaching shape:
+
+```text
+tasks
+overdue
+weekly
+ask-llm
+ask-tools
+local rule-based natural language routing
+```
+
+Product direction:
+
+```text
+one natural-language Agent entrypoint
+shared decision policy
+shared follow-up state
+shared confirmation state
+shared tool execution path
+```
+
+### Why LangGraph Comes Next
+
+LangGraph was not necessary at the start because the workflow was simple.
+
+By the end of Phase 6, the workflow has real state transitions:
+
+```text
+waiting for user input
+waiting for follow-up answer
+waiting for confirmation
+executing tool
+handling tool failure
+returning final answer
+```
+
+That is exactly the point where a graph-based workflow becomes useful.
+
+LangGraph can model these as nodes:
+
+```text
+Intent Node
+Date Normalization Node
+Missing Info Check Node
+Confirmation Node
+Tool Execution Node
+Response Node
+```
+
+It also makes human-in-the-loop checkpoints more explicit than the current `pending_action` and `pending_follow_up` variables in the CLI loop.
+
+### Phase 6 Completion Checklist
+
+Phase 6 is complete when you can explain:
+
+```text
+Why overdue is a backend rule.
+Why priority filtering belongs in backend query capability.
+Why grouping and summaries can be Agent response composition.
+Why relative dates must be normalized by runtime.
+Why MCP tools should be reusable capabilities instead of one tool per phrase.
+Why follow-up questions prevent unsafe guessing.
+Why write tools still require confirmation after follow-up.
+Why LangGraph becomes useful only after workflow state becomes complex.
+```
+
+### Next Phase
+
+Phase 7 should focus on productizing the Agent workflow:
+
+```text
+consolidate demo commands
+build one normal natural-language runtime path
+make follow-up and confirmation explicit workflow states
+introduce LangGraph for stateful orchestration
+prepare for stronger audit logging and safety policy
+```
