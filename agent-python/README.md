@@ -39,6 +39,18 @@ Install the project:
 python -m pip install -e .
 ```
 
+Phase 7 introduces a minimal LangGraph skeleton. After installing dependencies, you can check it with:
+
+```bash
+python graph_runtime.py
+```
+
+Expected output:
+
+```text
+Graph skeleton received: hello from LangGraph
+```
+
 The Agent starts the MCP Server as a subprocess. If the MCP Server dependencies are installed in a different virtual environment, point the Agent at that Python executable:
 
 ```bash

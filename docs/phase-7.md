@@ -1075,3 +1075,146 @@ Phase 7 Step 7.8: Add LangGraph Dependency And Minimal Graph Skeleton
 ```
 
 That step should not change user-visible Agent behavior yet.
+
+## Step 7.8: Add LangGraph Dependency And Minimal Graph Skeleton
+
+### Goal
+
+Step 7.8 adds LangGraph in the smallest possible way.
+
+The goal is not to rewrite the Agent yet.
+
+The goal is to prove that the project can:
+
+```text
+install LangGraph
+define a graph state shape
+define one graph node
+compile the graph
+invoke the graph
+```
+
+The existing CLI behavior stays unchanged.
+
+### Files We Touched
+
+- `agent-python/pyproject.toml`: adds the `langgraph` dependency.
+- `agent-python/graph_runtime.py`: adds a minimal LangGraph skeleton.
+- `agent-python/README.md`: documents how to run the graph skeleton.
+- `docs/phase-7.md`: explains why this step is intentionally small.
+
+### Concept
+
+LangGraph has three basic concepts we need first:
+
+```text
+State
+  The data passed between workflow nodes.
+
+Node
+  A function that reads state and returns a state update.
+
+Graph
+  The wiring that decides which node runs next.
+```
+
+In this step, we only build one node:
+
+```text
+normal_message
+```
+
+It does not call MCP tools yet. It only proves that graph state can flow through a compiled graph.
+
+### Implementation
+
+The new `graph_runtime.py` has a minimal state schema:
+
+```python
+class GraphAgentState(TypedDict, total=False):
+    user_message: str
+    response: str
+```
+
+It has one node:
+
+```python
+def normal_message_node(state: GraphAgentState) -> GraphAgentState:
+    user_message = state.get("user_message", "")
+    return {"response": f"Graph skeleton received: {user_message}"}
+```
+
+And one graph builder:
+
+```python
+def build_graph():
+    graph = StateGraph(GraphAgentState)
+    graph.add_node("normal_message", normal_message_node)
+    graph.set_entry_point("normal_message")
+    graph.add_edge("normal_message", END)
+    return graph.compile()
+```
+
+This is intentionally simple.
+
+### Why We Do Not Connect The CLI Yet
+
+Connecting the CLI immediately would mix two lessons:
+
+```text
+how LangGraph works
+how to migrate our Agent runtime into LangGraph
+```
+
+Step 7.8 teaches only the first lesson.
+
+The existing CLI remains the source of truth for actual Agent behavior.
+
+### How To Run Or Test
+
+Install or refresh Agent dependencies:
+
+```bash
+cd agent-python
+source .venv/bin/activate
+python -m pip install -e .
+```
+
+Run the graph skeleton:
+
+```bash
+python graph_runtime.py
+```
+
+Expected output:
+
+```text
+Graph skeleton received: hello from LangGraph
+```
+
+Also run syntax checks:
+
+```bash
+python -m py_compile main.py graph_runtime.py
+```
+
+### What You Learned
+
+You learned the smallest useful LangGraph shape:
+
+```text
+TypedDict state
+node function
+StateGraph
+entry point
+edge to END
+compiled graph invocation
+```
+
+### Next Step
+
+Next, we can move one real runtime behavior into the graph skeleton without changing the CLI:
+
+```text
+Phase 7 Step 7.9: Wrap Normal Message Handler In A Graph Node
+```

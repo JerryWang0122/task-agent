@@ -4,9 +4,13 @@ version = "0.1.0"
 description = "Python Agent orchestration layer for the Personal Task Management Agent tutorial"
 requires-python = ">=3.11"
 dependencies = [
+    "langgraph>=0.2.0",
     "mcp>=1.0.0",
     "openai>=1.0.0",
 ]
 
 [project.optional-dependencies]
 dev = []
+
+[tool.setuptools]
+py-modules = ["main", "graph_runtime"]
