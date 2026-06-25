@@ -738,3 +738,150 @@ This makes confirmation and follow-up behavior easier to test and safer to refac
 ### Next Step
 
 Next, we can introduce `Enum` values for pending kinds, replacing string literals like `"create_task"` and `"create_task_missing_title"`.
+
+## Step 7.6: Introduce Pending Kind Enums
+
+### Goal
+
+Step 7.6 replaces internal pending-state kind strings with enums.
+
+Before this step, typed pending state still used string values:
+
+```python
+PendingAction(kind="create_task")
+PendingFollowUp(kind="create_task_missing_title")
+```
+
+After this step, the Agent uses enum values:
+
+```python
+PendingAction(kind=PendingActionKind.CREATE_TASK)
+PendingFollowUp(kind=PendingFollowUpKind.CREATE_TASK_MISSING_TITLE)
+```
+
+### Files We Touched
+
+- `agent-python/main.py`: adds pending kind enums and replaces internal pending kind string comparisons.
+- `agent-python/README.md`: documents that pending kind values now use enums.
+- `docs/phase-7.md`: explains why enums are useful in workflow state schemas.
+
+### Concept
+
+Enums are useful when a field can only be one of a known set of values.
+
+For pending write actions, the current allowed values are:
+
+```text
+complete_task
+create_task
+```
+
+For pending follow-up questions, the current allowed value is:
+
+```text
+create_task_missing_title
+```
+
+Using enum values makes the allowed state transitions easier to review and harder to mistype.
+
+### Implementation
+
+The Agent now has:
+
+```python
+class PendingActionKind(Enum):
+    COMPLETE_TASK = "complete_task"
+    CREATE_TASK = "create_task"
+
+
+class PendingFollowUpKind(Enum):
+    CREATE_TASK_MISSING_TITLE = "create_task_missing_title"
+```
+
+`PendingAction` now stores:
+
+```python
+kind: PendingActionKind
+```
+
+`PendingFollowUp` now stores:
+
+```python
+kind: PendingFollowUpKind
+```
+
+Handlers compare enum values:
+
+```python
+if action_type == PendingActionKind.CREATE_TASK:
+    ...
+```
+
+instead of comparing strings.
+
+### Important Boundary
+
+This step only changes internal Agent runtime state.
+
+MCP tool names remain strings:
+
+```text
+create_task
+complete_task
+find_overdue_tasks
+```
+
+That is correct because MCP tool names are part of the external tool contract between Agent and MCP Server.
+
+### Why This Matters
+
+This continues the workflow-state hardening path:
+
+```text
+dict state
+  -> dataclass state
+  -> enum-constrained state
+  -> graph state schema later
+```
+
+Enums reduce typo risk and make it clearer which state transitions are supported.
+
+### How To Run Or Test
+
+Run a syntax check:
+
+```bash
+cd agent-python
+python -m py_compile main.py
+```
+
+You can test without the backend by checking the follow-up transition:
+
+```text
+create a task for tomorrow
+Buy milk
+```
+
+Expected internal state:
+
+```text
+PendingFollowUpKind.CREATE_TASK_MISSING_TITLE
+then PendingActionKind.CREATE_TASK
+```
+
+### What You Learned
+
+You learned that internal workflow state can be safer than external string contracts.
+
+The Agent still calls MCP tools by string name, but its own pending workflow state now uses typed enum values.
+
+### Next Step
+
+Next, we can start introducing LangGraph by mapping the manual runtime pieces to graph concepts:
+
+```text
+AgentState -> graph state
+handle_agent_message -> intent/tool decision node
+handle_pending_follow_up -> follow-up node
+handle_pending_action -> confirmation node
+```

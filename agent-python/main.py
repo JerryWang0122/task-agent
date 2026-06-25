@@ -1,6 +1,7 @@
 import asyncio
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
+from enum import Enum
 import json
 import os
 import re
@@ -29,11 +30,24 @@ class ToolExecutionError(Exception):
     """Raised when an MCP tool call fails and should be shown clearly to the user."""
 
 
+class PendingActionKind(Enum):
+    """Kinds of write actions that can wait for confirmation."""
+
+    COMPLETE_TASK = "complete_task"
+    CREATE_TASK = "create_task"
+
+
+class PendingFollowUpKind(Enum):
+    """Kinds of missing information the Agent can wait for."""
+
+    CREATE_TASK_MISSING_TITLE = "create_task_missing_title"
+
+
 @dataclass
 class PendingAction:
     """A write action waiting for user confirmation."""
 
-    kind: str
+    kind: PendingActionKind
     task_id: int | None = None
     title: str | None = None
     due_date: str | None = None
@@ -43,7 +57,7 @@ class PendingAction:
 class PendingFollowUp:
     """Missing information the Agent is waiting for."""
 
-    kind: str
+    kind: PendingFollowUpKind
     due_date: str | None = None
 
 
@@ -338,7 +352,7 @@ def pending_action_from_llm_decision(decision: dict[str, object]) -> tuple[Pendi
             return None
 
         return (
-            PendingAction(kind="complete_task", task_id=int(task_id)),
+            PendingAction(kind=PendingActionKind.COMPLETE_TASK, task_id=int(task_id)),
             f"Confirm: mark task #{task_id} as completed? Type 'yes' or 'no'.",
         )
 
@@ -349,7 +363,7 @@ def pending_action_from_llm_decision(decision: dict[str, object]) -> tuple[Pendi
 
         due_date = arguments.get("due_date") or arguments.get("dueDate")
         return (
-            PendingAction(kind="create_task", title=str(title), due_date=str(due_date) if due_date else None),
+            PendingAction(kind=PendingActionKind.CREATE_TASK, title=str(title), due_date=str(due_date) if due_date else None),
             create_task_confirmation_message(str(title), str(due_date) if due_date else None),
         )
 
@@ -878,7 +892,7 @@ async def handle_local_agent_message(
         task_id = extract_task_id(user_message)
         return AgentTurnResult(
             response=f"Confirm: mark task #{task_id} as completed? Type 'yes' or 'no'.",
-            pending_action=PendingAction(kind="complete_task", task_id=task_id),
+            pending_action=PendingAction(kind=PendingActionKind.COMPLETE_TASK, task_id=task_id),
         )
 
     create_title = extract_create_task_title(user_message)
@@ -886,7 +900,7 @@ async def handle_local_agent_message(
         due_date = extract_create_task_due_date(user_message)
         return AgentTurnResult(
             response=create_task_confirmation_message(create_title, due_date),
-            pending_action=PendingAction(kind="create_task", title=create_title, due_date=due_date),
+            pending_action=PendingAction(kind=PendingActionKind.CREATE_TASK, title=create_title, due_date=due_date),
         )
 
     if is_create_task_request(user_message):
@@ -897,7 +911,10 @@ async def handle_local_agent_message(
             response = "What is the task title?"
         return AgentTurnResult(
             response=response,
-            pending_follow_up=PendingFollowUp(kind="create_task_missing_title", due_date=due_date),
+            pending_follow_up=PendingFollowUp(
+                kind=PendingFollowUpKind.CREATE_TASK_MISSING_TITLE,
+                due_date=due_date,
+            ),
         )
 
     task_id = extract_task_id(user_message)
@@ -950,12 +967,12 @@ def handle_pending_action(state: AgentState, user_message: str) -> str:
     if normalized_message in {"yes", "y", "confirm"}:
         action_type = pending_action.kind
 
-        if action_type == "complete_task":
+        if action_type == PendingActionKind.COMPLETE_TASK:
             task_id = int(pending_action.task_id)
             state.pending_action = None
             return run_tool_command(complete_task(task_id))
 
-        if action_type == "create_task":
+        if action_type == PendingActionKind.CREATE_TASK:
             title = str(pending_action.title)
             due_date = pending_action.due_date
             state.pending_action = None
@@ -983,11 +1000,11 @@ def handle_pending_follow_up(state: AgentState, user_message: str) -> str:
         return "Cancelled. No task was changed."
 
     follow_up_type = pending_follow_up.kind
-    if follow_up_type == "create_task_missing_title":
+    if follow_up_type == PendingFollowUpKind.CREATE_TASK_MISSING_TITLE:
         title = user_message.strip()
         due_date = pending_follow_up.due_date
         state.pending_follow_up = None
-        state.pending_action = PendingAction(kind="create_task", title=title, due_date=due_date)
+        state.pending_action = PendingAction(kind=PendingActionKind.CREATE_TASK, title=title, due_date=due_date)
         return create_task_confirmation_message(title, str(due_date) if due_date else None)
 
     state.pending_follow_up = None
