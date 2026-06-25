@@ -943,6 +943,7 @@ async def handle_agent_message(
     user_message: str,
 ) -> AgentTurnResult:
     """Handle one normal natural-language message through the unified Agent path."""
+    # Future graph node: intent/tool decision for normal user messages.
     if should_group_overdue_tasks_by_priority(user_message) or should_summarize_weekly_workload(user_message):
         return await handle_local_agent_message(user_message)
 
@@ -959,6 +960,7 @@ async def handle_agent_message(
 
 def handle_pending_action(state: AgentState, user_message: str) -> str:
     """Handle a user reply while the Agent waits for write confirmation."""
+    # Future graph node: confirmation handling before write-tool execution.
     normalized_message = user_message.lower()
     pending_action = state.pending_action
     if pending_action is None:
@@ -990,6 +992,7 @@ def handle_pending_action(state: AgentState, user_message: str) -> str:
 
 def handle_pending_follow_up(state: AgentState, user_message: str) -> str:
     """Handle a user reply while the Agent waits for missing information."""
+    # Future graph node: collect missing information before confirmation.
     normalized_message = user_message.lower()
     pending_follow_up = state.pending_follow_up
     if pending_follow_up is None:

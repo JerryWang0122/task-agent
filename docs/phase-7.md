@@ -885,3 +885,193 @@ handle_agent_message -> intent/tool decision node
 handle_pending_follow_up -> follow-up node
 handle_pending_action -> confirmation node
 ```
+
+## Step 7.7: Map Manual Runtime To LangGraph Concepts
+
+### Goal
+
+Step 7.7 explains how the manual Agent runtime maps to LangGraph concepts.
+
+We are not adding LangGraph yet.
+
+Instead, we are making the transition understandable:
+
+```text
+manual stateful runtime
+  -> graph-shaped runtime
+  -> LangGraph implementation later
+```
+
+This matters because adding a graph library too early can hide the core idea. The core idea is state plus transitions.
+
+### Files We Touched
+
+- `agent-python/main.py`: adds small comments marking future graph node boundaries.
+- `agent-python/README.md`: explains that the runtime is now graph-shaped, but not yet LangGraph-based.
+- `docs/phase-7.md`: maps current code to LangGraph concepts.
+
+### Concept
+
+LangGraph is useful when an Agent workflow has:
+
+```text
+state
+nodes
+edges
+checkpoints
+conditional routing
+human-in-the-loop pauses
+```
+
+We already built the manual version of these ideas.
+
+### Manual Runtime To LangGraph Mapping
+
+Current manual runtime:
+
+```text
+AgentState
+AgentTurnResult
+handle_agent_message
+handle_pending_follow_up
+handle_pending_action
+apply_decision_policy
+call_mcp_tool
+```
+
+LangGraph concept mapping:
+
+```text
+AgentState
+  -> Graph state schema
+
+AgentTurnResult
+  -> State update returned by a node
+
+handle_agent_message
+  -> Intent and tool-decision node
+
+handle_pending_follow_up
+  -> Follow-up collection node
+
+handle_pending_action
+  -> Confirmation node
+
+apply_decision_policy
+  -> Safety policy node or guard
+
+call_mcp_tool
+  -> Tool execution node
+```
+
+### Current Control Flow
+
+The current CLI does this manually:
+
+```text
+read user message
+  -> if pending_action exists: handle confirmation
+  -> else if pending_follow_up exists: handle missing information
+  -> else handle normal message
+  -> update AgentState
+  -> print response
+```
+
+In graph terms, this is conditional routing.
+
+The condition is:
+
+```text
+Does state.pending_action exist?
+Does state.pending_follow_up exist?
+Otherwise, is this a normal message?
+```
+
+### Why We Did Manual First
+
+The manual runtime taught the important Agent patterns without hiding them behind a framework:
+
+```text
+write tools need confirmation
+missing fields need follow-up
+LLM output must pass through runtime policy
+tool calls need logging and error handling
+relative dates need deterministic normalization
+state must survive across turns
+```
+
+Now LangGraph can be introduced as a way to organize known workflow states, not as magic.
+
+### What LangGraph Would Add
+
+LangGraph would give us a more formal place for:
+
+```text
+state schema
+node definitions
+conditional edges
+checkpointing
+resume after human input
+retry/error paths
+observability of workflow steps
+```
+
+The most important future upgrade is checkpointing.
+
+Right now, `AgentState` is in memory inside one CLI process. If the process exits, pending confirmations disappear.
+
+With a graph/checkpoint setup, we can eventually persist state and resume workflows more safely.
+
+### What Not To Change Yet
+
+We should not replace everything with LangGraph in one jump.
+
+The safer next implementation path is:
+
+```text
+1. Add LangGraph dependency.
+2. Create a minimal graph state schema.
+3. Move normal message handling into one graph node.
+4. Add conditional routing for pending follow-up and pending action.
+5. Keep MCP tool execution and safety policy behavior unchanged.
+```
+
+The rule is: change orchestration structure without changing business behavior.
+
+### How To Run Or Test
+
+This step only adds documentation and comments.
+
+Run a syntax check:
+
+```bash
+cd agent-python
+python -m py_compile main.py
+```
+
+Expected result:
+
+```text
+No syntax errors.
+```
+
+### What You Learned
+
+You learned how to recognize LangGraph concepts before installing LangGraph.
+
+The key lesson:
+
+```text
+LangGraph is not the Agent intelligence.
+LangGraph is the workflow orchestration structure around Agent state and transitions.
+```
+
+### Next Step
+
+Next, we can introduce LangGraph in the smallest possible way:
+
+```text
+Phase 7 Step 7.8: Add LangGraph Dependency And Minimal Graph Skeleton
+```
+
+That step should not change user-visible Agent behavior yet.
