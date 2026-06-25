@@ -604,3 +604,137 @@ This prepares the code for stronger typing and future graph state updates.
 Next, we can introduce explicit action/follow-up types instead of plain dictionaries.
 
 That would make `pending_action["type"]` and `pending_follow_up["type"]` safer and easier to test.
+
+## Step 7.5: Introduce Explicit Pending Types
+
+### Goal
+
+Step 7.5 replaces pending workflow dictionaries with typed dataclasses.
+
+Before this step, pending state looked like this:
+
+```python
+{"type": "create_task", "title": "Buy milk", "due_date": "2026-06-25"}
+```
+
+That shape is flexible, but too easy to mistype.
+
+After this step, pending state uses explicit classes:
+
+```python
+PendingAction(kind="create_task", title="Buy milk", due_date="2026-06-25")
+PendingFollowUp(kind="create_task_missing_title", due_date="2026-06-25")
+```
+
+### Files We Touched
+
+- `agent-python/main.py`: adds typed pending state classes and replaces dict access.
+- `agent-python/README.md`: documents that pending runtime state now uses typed objects.
+- `docs/phase-7.md`: explains why typed pending state is safer.
+
+### Concept
+
+Agent workflow state should have a schema.
+
+Plain dictionaries are useful early in a tutorial because they are quick to write:
+
+```python
+pending_action["type"]
+pending_action["title"]
+```
+
+But as workflow complexity grows, dictionaries become fragile:
+
+```text
+misspelled keys
+missing fields
+unclear expected shape
+harder tests
+harder refactoring
+```
+
+Typed pending objects make the state contract explicit.
+
+### Implementation
+
+The Agent now has:
+
+```python
+@dataclass
+class PendingAction:
+    kind: str
+    task_id: int | None = None
+    title: str | None = None
+    due_date: str | None = None
+
+
+@dataclass
+class PendingFollowUp:
+    kind: str
+    due_date: str | None = None
+```
+
+`AgentState` now stores:
+
+```python
+pending_action: PendingAction | None
+pending_follow_up: PendingFollowUp | None
+```
+
+Handlers now read named attributes:
+
+```python
+pending_action.kind
+pending_action.task_id
+pending_action.title
+pending_action.due_date
+```
+
+instead of dictionary keys.
+
+### Why This Matters
+
+This is a small step toward production-grade workflow state.
+
+Later, LangGraph will need a state schema. The current dataclasses are the manual version of that idea.
+
+The pattern is:
+
+```text
+loose dicts early for learning
+typed dataclasses when workflow stabilizes
+graph state schema when orchestration becomes complex
+```
+
+### How To Run Or Test
+
+Run a syntax check:
+
+```bash
+cd agent-python
+python -m py_compile main.py
+```
+
+You can test the typed follow-up transition without the backend:
+
+```text
+create a task for tomorrow
+Buy milk
+```
+
+Expected internal state:
+
+```text
+PendingFollowUp(kind="create_task_missing_title")
+then PendingAction(kind="create_task", title="Buy milk")
+```
+
+### What You Learned
+
+You learned that Agent state should move from flexible dictionaries to explicit schemas as workflows become more stable.
+
+This makes confirmation and follow-up behavior easier to test and safer to refactor.
+
+### Next Step
+
+Next, we can introduce `Enum` values for pending kinds, replacing string literals like `"create_task"` and `"create_task_missing_title"`.

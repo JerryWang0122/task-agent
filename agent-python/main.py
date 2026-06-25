@@ -30,11 +30,29 @@ class ToolExecutionError(Exception):
 
 
 @dataclass
+class PendingAction:
+    """A write action waiting for user confirmation."""
+
+    kind: str
+    task_id: int | None = None
+    title: str | None = None
+    due_date: str | None = None
+
+
+@dataclass
+class PendingFollowUp:
+    """Missing information the Agent is waiting for."""
+
+    kind: str
+    due_date: str | None = None
+
+
+@dataclass
 class AgentState:
     """Track the Agent workflow state between CLI messages."""
 
-    pending_action: dict[str, object] | None = None
-    pending_follow_up: dict[str, object] | None = None
+    pending_action: PendingAction | None = None
+    pending_follow_up: PendingFollowUp | None = None
 
 
 @dataclass
@@ -42,8 +60,8 @@ class AgentTurnResult:
     """Describe the result of handling one normal user message."""
 
     response: str
-    pending_action: dict[str, object] | None = None
-    pending_follow_up: dict[str, object] | None = None
+    pending_action: PendingAction | None = None
+    pending_follow_up: PendingFollowUp | None = None
 
 
 def decide_with_llm(user_message: str) -> dict[str, object]:
@@ -304,7 +322,7 @@ async def execute_llm_decision(decision: dict[str, object]) -> str:
     return f"Unsupported LLM tool: {tool_name}"
 
 
-def pending_action_from_llm_decision(decision: dict[str, object]) -> tuple[dict[str, object], str] | None:
+def pending_action_from_llm_decision(decision: dict[str, object]) -> tuple[PendingAction, str] | None:
     """Convert an LLM write-tool decision into a pending confirmation action."""
     if decision.get("action") != "call_tool":
         return None
@@ -320,7 +338,7 @@ def pending_action_from_llm_decision(decision: dict[str, object]) -> tuple[dict[
             return None
 
         return (
-            {"type": "complete_task", "task_id": int(task_id)},
+            PendingAction(kind="complete_task", task_id=int(task_id)),
             f"Confirm: mark task #{task_id} as completed? Type 'yes' or 'no'.",
         )
 
@@ -331,14 +349,14 @@ def pending_action_from_llm_decision(decision: dict[str, object]) -> tuple[dict[
 
         due_date = arguments.get("due_date") or arguments.get("dueDate")
         return (
-            {"type": "create_task", "title": str(title), "due_date": str(due_date) if due_date else None},
+            PendingAction(kind="create_task", title=str(title), due_date=str(due_date) if due_date else None),
             create_task_confirmation_message(str(title), str(due_date) if due_date else None),
         )
 
     return None
 
 
-async def apply_decision_policy(decision: dict[str, object]) -> tuple[dict[str, object] | None, str]:
+async def apply_decision_policy(decision: dict[str, object]) -> tuple[PendingAction | None, str]:
     """Apply Agent safety policy to one LLM decision."""
     pending_action = pending_action_from_llm_decision(decision)
     if pending_action is not None:
@@ -860,7 +878,7 @@ async def handle_local_agent_message(
         task_id = extract_task_id(user_message)
         return AgentTurnResult(
             response=f"Confirm: mark task #{task_id} as completed? Type 'yes' or 'no'.",
-            pending_action={"type": "complete_task", "task_id": task_id},
+            pending_action=PendingAction(kind="complete_task", task_id=task_id),
         )
 
     create_title = extract_create_task_title(user_message)
@@ -868,7 +886,7 @@ async def handle_local_agent_message(
         due_date = extract_create_task_due_date(user_message)
         return AgentTurnResult(
             response=create_task_confirmation_message(create_title, due_date),
-            pending_action={"type": "create_task", "title": create_title, "due_date": due_date},
+            pending_action=PendingAction(kind="create_task", title=create_title, due_date=due_date),
         )
 
     if is_create_task_request(user_message):
@@ -879,7 +897,7 @@ async def handle_local_agent_message(
             response = "What is the task title?"
         return AgentTurnResult(
             response=response,
-            pending_follow_up={"type": "create_task_missing_title", "due_date": due_date},
+            pending_follow_up=PendingFollowUp(kind="create_task_missing_title", due_date=due_date),
         )
 
     task_id = extract_task_id(user_message)
@@ -930,16 +948,16 @@ def handle_pending_action(state: AgentState, user_message: str) -> str:
         return "No pending action to handle."
 
     if normalized_message in {"yes", "y", "confirm"}:
-        action_type = pending_action["type"]
+        action_type = pending_action.kind
 
         if action_type == "complete_task":
-            task_id = int(pending_action["task_id"])
+            task_id = int(pending_action.task_id)
             state.pending_action = None
             return run_tool_command(complete_task(task_id))
 
         if action_type == "create_task":
-            title = str(pending_action["title"])
-            due_date = pending_action.get("due_date")
+            title = str(pending_action.title)
+            due_date = pending_action.due_date
             state.pending_action = None
             return run_tool_command(create_task(title, str(due_date) if due_date else None))
 
@@ -964,12 +982,12 @@ def handle_pending_follow_up(state: AgentState, user_message: str) -> str:
         state.pending_follow_up = None
         return "Cancelled. No task was changed."
 
-    follow_up_type = pending_follow_up["type"]
+    follow_up_type = pending_follow_up.kind
     if follow_up_type == "create_task_missing_title":
         title = user_message.strip()
-        due_date = pending_follow_up.get("due_date")
+        due_date = pending_follow_up.due_date
         state.pending_follow_up = None
-        state.pending_action = {"type": "create_task", "title": title, "due_date": due_date}
+        state.pending_action = PendingAction(kind="create_task", title=title, due_date=due_date)
         return create_task_confirmation_message(title, str(due_date) if due_date else None)
 
     state.pending_follow_up = None
