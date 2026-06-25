@@ -1218,3 +1218,130 @@ Next, we can move one real runtime behavior into the graph skeleton without chan
 ```text
 Phase 7 Step 7.9: Wrap Normal Message Handler In A Graph Node
 ```
+
+## Step 7.9: Wrap Normal Message Handler In A Graph Node
+
+### Goal
+
+Step 7.9 moves one real Agent runtime behavior into the LangGraph skeleton.
+
+The graph node now calls the existing normal-message handler:
+
+```python
+handle_agent_message(user_message)
+```
+
+This still does not change the CLI.
+
+The goal is to prove that LangGraph can host the runtime behavior we already built.
+
+### Files We Touched
+
+- `agent-python/graph_runtime.py`: wraps `handle_agent_message` inside `normal_message_node`.
+- `agent-python/README.md`: updates the graph skeleton expected output.
+- `docs/phase-7.md`: records why we wrap before switching the CLI.
+
+### Concept
+
+The migration path should be incremental:
+
+```text
+manual function
+  -> graph node that calls the manual function
+  -> graph controls routing
+  -> CLI invokes graph
+```
+
+This avoids a risky rewrite.
+
+### Implementation
+
+The graph state now includes fields that match `AgentTurnResult`:
+
+```python
+class GraphAgentState(TypedDict, total=False):
+    user_message: str
+    response: str
+    pending_action: PendingAction | None
+    pending_follow_up: PendingFollowUp | None
+```
+
+The graph node now runs the existing Agent runtime:
+
+```python
+def normal_message_node(state: GraphAgentState) -> GraphAgentState:
+    user_message = state.get("user_message", "")
+    turn_result = asyncio.run(handle_agent_message(user_message))
+    return {
+        "response": turn_result.response,
+        "pending_action": turn_result.pending_action,
+        "pending_follow_up": turn_result.pending_follow_up,
+    }
+```
+
+This means the graph node can now produce real Agent state updates, not just a placeholder response.
+
+### Why We Still Do Not Switch The CLI
+
+The CLI currently has three responsibilities:
+
+```text
+read input
+route pending states
+call normal message handler
+```
+
+Step 7.9 only moves the normal message handler into graph form.
+
+Pending confirmation and follow-up routing are still manual.
+
+We should not switch the CLI until the graph can represent those pending-state routes too.
+
+### Serialization Note
+
+For now, graph state stores `PendingAction` and `PendingFollowUp` dataclass objects directly.
+
+That is acceptable for this local learning skeleton.
+
+Later, when we add checkpointing or persistence, we will need to make graph state serializable.
+
+### How To Run Or Test
+
+Run the graph skeleton without needing the backend:
+
+```bash
+cd agent-python
+OPENAI_API_KEY= python graph_runtime.py
+```
+
+Expected output:
+
+```text
+What is the task title? I will set the due date to <tomorrow's date>.
+```
+
+Also run syntax checks:
+
+```bash
+python -m py_compile main.py graph_runtime.py
+```
+
+### What You Learned
+
+You learned the safest way to introduce a workflow framework:
+
+```text
+first wrap existing behavior
+then migrate routing
+then switch the user-facing entrypoint
+```
+
+### Next Step
+
+Next, we can add graph conditional routing for pending states:
+
+```text
+if pending_action exists -> confirmation node
+if pending_follow_up exists -> follow-up node
+otherwise -> normal message node
+```
