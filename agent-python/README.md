@@ -39,7 +39,7 @@ Install the project:
 python -m pip install -e .
 ```
 
-Phase 7 introduces a minimal LangGraph skeleton. The graph node now wraps the existing normal-message Agent handler. After installing dependencies, you can check it with:
+Phase 7 introduces a minimal LangGraph skeleton. The graph now routes between normal-message, follow-up, and confirmation nodes. After installing dependencies, you can check it with:
 
 ```bash
 python graph_runtime.py
@@ -49,6 +49,7 @@ Expected output:
 
 ```text
 What is the task title? I will set the due date to <tomorrow's date>.
+Confirm: create task 'Buy milk' due <tomorrow's date>? Type 'yes' or 'no'.
 ```
 
 The Agent starts the MCP Server as a subprocess. If the MCP Server dependencies are installed in a different virtual environment, point the Agent at that Python executable:

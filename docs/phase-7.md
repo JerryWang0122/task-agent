@@ -1345,3 +1345,163 @@ if pending_action exists -> confirmation node
 if pending_follow_up exists -> follow-up node
 otherwise -> normal message node
 ```
+
+## Step 7.10: Add Graph Conditional Routing For Pending States
+
+### Goal
+
+Step 7.10 teaches LangGraph conditional routing.
+
+The graph can now inspect workflow state and choose one of three paths:
+
+```text
+pending_action exists
+  -> pending_action node
+
+pending_follow_up exists
+  -> pending_follow_up node
+
+otherwise
+  -> normal_message node
+```
+
+The CLI still does not use the graph yet.
+
+### Files We Touched
+
+- `agent-python/graph_runtime.py`: adds graph routing and pending workflow nodes.
+- `agent-python/README.md`: updates the graph demo output.
+- `docs/phase-7.md`: explains conditional routing and why the CLI is still unchanged.
+
+### Concept
+
+Conditional routing is how a graph chooses the next node based on state.
+
+In our manual CLI, this logic currently looks like:
+
+```python
+if state.pending_action is not None:
+    handle_pending_action(...)
+elif state.pending_follow_up is not None:
+    handle_pending_follow_up(...)
+else:
+    handle_agent_message(...)
+```
+
+In LangGraph, we represent that decision as a route function:
+
+```python
+def route_input(state):
+    if state.get("pending_action") is not None:
+        return "pending_action"
+    if state.get("pending_follow_up") is not None:
+        return "pending_follow_up"
+    return "normal_message"
+```
+
+### Implementation
+
+The graph now has an entry node:
+
+```text
+route_input
+```
+
+That node does not change state. It gives the graph a place to run conditional routing.
+
+The graph now has three work nodes:
+
+```text
+normal_message
+pending_follow_up
+pending_action
+```
+
+The graph wiring is:
+
+```python
+graph.set_entry_point("route_input")
+graph.add_conditional_edges(
+    "route_input",
+    route_input,
+    {
+        "normal_message": "normal_message",
+        "pending_action": "pending_action",
+        "pending_follow_up": "pending_follow_up",
+    },
+)
+```
+
+Each work node ends the graph for now:
+
+```python
+graph.add_edge("normal_message", END)
+graph.add_edge("pending_action", END)
+graph.add_edge("pending_follow_up", END)
+```
+
+### Why Each Node Ends For Now
+
+This graph models one user turn at a time.
+
+One invocation means:
+
+```text
+take current state + latest user message
+route to the correct node
+return updated state + response
+```
+
+The next user message becomes the next graph invocation.
+
+That is similar to how the CLI loop works today.
+
+### Demo Flow
+
+The graph demo now runs two turns:
+
+```text
+Turn 1 input: create a task for tomorrow
+Turn 1 output: What is the task title?
+
+Turn 2 input: Buy milk
+Turn 2 output: Confirm: create task 'Buy milk' due <tomorrow>? Type 'yes' or 'no'.
+```
+
+This proves the graph can carry pending state from one turn into the next.
+
+### How To Run Or Test
+
+Run the graph demo without backend or OpenAI:
+
+```bash
+cd agent-python
+OPENAI_API_KEY= python graph_runtime.py
+```
+
+Expected output:
+
+```text
+What is the task title? I will set the due date to <tomorrow's date>.
+Confirm: create task 'Buy milk' due <tomorrow's date>? Type 'yes' or 'no'.
+```
+
+Also run syntax checks:
+
+```bash
+python -m py_compile main.py graph_runtime.py
+```
+
+### What You Learned
+
+You learned how manual `if/elif/else` workflow routing maps to LangGraph conditional edges.
+
+The important idea is:
+
+```text
+state decides the next node
+```
+
+### Next Step
+
+Next, we can make the CLI optionally invoke the graph for normal turns while keeping the old manual path available as a fallback.
