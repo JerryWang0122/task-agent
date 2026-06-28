@@ -17,6 +17,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MCP_SERVER_DIR = PROJECT_ROOT / "mcp-server"
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
 USE_LANGGRAPH_RUNTIME = os.getenv("USE_LANGGRAPH_RUNTIME") == "1"
+AGENT_THREAD_ID = os.getenv("AGENT_THREAD_ID", "default")
 AGENT_TOOL_NAMES = {
     "list_tasks",
     "get_task",
@@ -1015,13 +1016,15 @@ def handle_pending_follow_up(state: AgentState, user_message: str) -> str:
     return "Cancelled unknown follow-up request."
 
 
-def run_graph_turn(compiled_graph: object, graph_state: dict[str, object], user_message: str) -> str:
+def run_graph_turn(compiled_graph: object, thread_id: str, user_message: str) -> str:
     """Run one CLI turn through the optional LangGraph runtime."""
-    graph_state["user_message"] = user_message
-    updated_state = compiled_graph.invoke(graph_state)
-    graph_state.clear()
-    graph_state.update(updated_state)
-    return str(graph_state.get("response") or "")
+    from graph_runtime import graph_config
+
+    updated_state = compiled_graph.invoke(
+        {"user_message": user_message},
+        config=graph_config(thread_id),
+    )
+    return str(updated_state.get("response") or "")
 
 
 def main() -> None:
@@ -1031,11 +1034,10 @@ def main() -> None:
         "'ask-tools <message>', or 'exit' to quit."
     )
     if USE_LANGGRAPH_RUNTIME:
-        print("LangGraph runtime is enabled for normal task messages.")
+        print(f"LangGraph runtime is enabled for normal task messages. Thread: {AGENT_THREAD_ID}")
 
     state = AgentState()
     compiled_graph = None
-    graph_state: dict[str, object] = {}
 
     while True:
         user_message = input("> ").strip()
@@ -1096,11 +1098,11 @@ def main() -> None:
 
         if USE_LANGGRAPH_RUNTIME:
             if compiled_graph is None:
-                from graph_runtime import build_graph
+                from graph_runtime import build_checkpointed_graph
 
-                compiled_graph = build_graph()
+                compiled_graph = build_checkpointed_graph()
 
-            print(run_graph_turn(compiled_graph, graph_state, user_message))
+            print(run_graph_turn(compiled_graph, AGENT_THREAD_ID, user_message))
             continue
 
         try:

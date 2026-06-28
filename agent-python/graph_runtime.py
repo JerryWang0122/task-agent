@@ -1,6 +1,7 @@
 import asyncio
 from typing import TypedDict
 
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 
 from main import (
@@ -16,6 +17,7 @@ from main import (
 
 
 SerializedPendingState = dict[str, object]
+DEFAULT_THREAD_ID = "demo-thread"
 
 
 class GraphAgentState(TypedDict, total=False):
@@ -153,7 +155,12 @@ def pending_follow_up_node(state: GraphAgentState) -> GraphAgentState:
     }
 
 
-def build_graph():
+def graph_config(thread_id: str) -> dict[str, dict[str, str]]:
+    """Build the LangGraph config that selects one resumable workflow thread."""
+    return {"configurable": {"thread_id": thread_id}}
+
+
+def build_graph(checkpointer: object | None = None):
     """Build the smallest LangGraph workflow for the Agent tutorial."""
     graph = StateGraph(GraphAgentState)
     graph.add_node("route_input", route_input_node)
@@ -173,13 +180,20 @@ def build_graph():
     graph.add_edge("normal_message", END)
     graph.add_edge("pending_action", END)
     graph.add_edge("pending_follow_up", END)
-    return graph.compile()
+    return graph.compile(checkpointer=checkpointer)
+
+
+def build_checkpointed_graph():
+    """Build the graph with an in-memory checkpointer for one Python process."""
+    return build_graph(checkpointer=MemorySaver())
 
 
 if __name__ == "__main__":
-    compiled_graph = build_graph()
-    first_result = compiled_graph.invoke({"user_message": "create a task for tomorrow"})
+    compiled_graph = build_checkpointed_graph()
+    config = graph_config(DEFAULT_THREAD_ID)
+
+    first_result = compiled_graph.invoke({"user_message": "create a task for tomorrow"}, config=config)
     print(first_result["response"])
 
-    second_result = compiled_graph.invoke({**first_result, "user_message": "Buy milk"})
+    second_result = compiled_graph.invoke({"user_message": "Buy milk"}, config=config)
     print(second_result["response"])

@@ -141,3 +141,113 @@ Runtime objects make code readable. Serialized state makes workflow checkpointin
 ### Next Step
 
 Next, we can add a LangGraph checkpointer and introduce the idea of `thread_id` for resuming a workflow.
+
+## Step 8.2: Add LangGraph Checkpointer
+
+### Goal
+
+Connect the serializable graph state from Step 8.1 to a LangGraph checkpointer.
+
+This is the step where Step 8.1 starts to make practical sense. A checkpointer can only safely save workflow state if that state has a stable, serializable shape.
+
+### Files We Touched
+
+- `agent-python/graph_runtime.py`: adds an in-memory LangGraph checkpointer and graph config helper.
+- `agent-python/main.py`: changes the opt-in graph CLI to use a `thread_id` instead of manually carrying a graph state dictionary.
+- `docs/phase-8.md`: explains checkpointer and thread concepts.
+
+### Concept
+
+LangGraph checkpointing introduces two important ideas:
+
+```text
+checkpointer
+  stores workflow state after graph execution
+
+thread_id
+  identifies which workflow conversation should be resumed
+```
+
+In this step we use `MemorySaver`, which means:
+
+```text
+state can be resumed within the same Python process
+state is lost when the process exits
+```
+
+That is enough for learning how checkpointing works. A later step can replace it with a durable checkpointer.
+
+### Implementation
+
+The graph runtime now provides:
+
+```text
+graph_config(thread_id)
+build_checkpointed_graph()
+```
+
+The CLI graph path now invokes the graph like this conceptually:
+
+```text
+compiled_graph.invoke(
+  {"user_message": user_message},
+  config={"configurable": {"thread_id": "default"}}
+)
+```
+
+The important difference is that the CLI no longer passes the previous `graph_state` dictionary back into every turn.
+
+Instead:
+
+```text
+LangGraph checkpointer stores the previous state.
+thread_id tells LangGraph which previous state to load.
+```
+
+### How To Run Or Test
+
+Run syntax checks:
+
+```bash
+cd agent-python
+.venv/bin/python -m py_compile main.py graph_runtime.py
+```
+
+Run the graph demo:
+
+```bash
+OPENAI_API_KEY= .venv/bin/python graph_runtime.py
+```
+
+Run the CLI with graph runtime and a named thread:
+
+```bash
+OPENAI_API_KEY= USE_LANGGRAPH_RUNTIME=1 AGENT_THREAD_ID=demo-1 .venv/bin/python main.py
+```
+
+Try:
+
+```text
+create a task for tomorrow
+Buy milk
+no
+exit
+```
+
+Expected behavior:
+
+```text
+The first turn stores a pending follow-up in the checkpoint.
+The second turn resumes that pending follow-up by thread_id and creates a pending confirmation.
+The third turn resumes that pending confirmation and cancels it.
+```
+
+### What You Learned
+
+You learned why serializable graph state matters.
+
+Step 8.1 made state safe to save. Step 8.2 actually saves and resumes that state inside LangGraph.
+
+### Next Step
+
+Next, we can inspect checkpoint state more explicitly or move from in-memory checkpointing toward durable checkpoint storage.
