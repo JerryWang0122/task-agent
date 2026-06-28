@@ -83,6 +83,14 @@ complete task 1
 
 If `OPENAI_API_KEY` is configured, normal messages can use OpenAI tool-calling automatically. If it is not configured, the Agent falls back to local tutorial routing so the project remains runnable without an LLM key.
 
+To try the LangGraph runtime from the CLI, opt in with:
+
+```bash
+USE_LANGGRAPH_RUNTIME=1 python main.py
+```
+
+This routes normal task messages through the graph while keeping the manual runtime available as the default fallback.
+
 Debug and teaching commands:
 
 - `tools`: start the MCP Server and list available MCP tools

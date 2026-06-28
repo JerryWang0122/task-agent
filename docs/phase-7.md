@@ -1505,3 +1505,126 @@ state decides the next node
 ### Next Step
 
 Next, we can make the CLI optionally invoke the graph for normal turns while keeping the old manual path available as a fallback.
+
+## Step 7.11: Add Optional Graph Runtime CLI Flag
+
+### Goal
+
+Step 7.11 lets the CLI opt in to the LangGraph runtime.
+
+The default CLI path remains the manual runtime.
+
+The graph path is enabled only when this environment variable is set:
+
+```bash
+USE_LANGGRAPH_RUNTIME=1
+```
+
+This keeps the migration safe.
+
+### Files We Touched
+
+- `agent-python/main.py`: adds `USE_LANGGRAPH_RUNTIME` and a graph turn runner.
+- `agent-python/README.md`: documents how to enable graph runtime.
+- `docs/phase-7.md`: explains why the graph path is opt-in first.
+
+### Concept
+
+When migrating orchestration systems, avoid big-bang cutovers.
+
+Safer migration path:
+
+```text
+manual runtime remains default
+graph runtime is opt-in
+compare behavior
+then switch default later
+```
+
+This is common in enterprise systems. New infrastructure is introduced behind a flag first.
+
+### Implementation
+
+The Agent now reads:
+
+```python
+USE_LANGGRAPH_RUNTIME = os.getenv("USE_LANGGRAPH_RUNTIME") == "1"
+```
+
+When enabled, the CLI lazily imports and builds the graph:
+
+```python
+from graph_runtime import build_graph
+compiled_graph = build_graph()
+```
+
+The lazy import is intentional. `graph_runtime.py` imports existing runtime functions from `main.py`, so importing it only when needed avoids making the default manual path depend on graph startup.
+
+Each graph turn updates an in-memory graph state dictionary:
+
+```python
+graph_state["user_message"] = user_message
+updated_state = compiled_graph.invoke(graph_state)
+graph_state.clear()
+graph_state.update(updated_state)
+```
+
+This means pending follow-up and confirmation state can flow from one graph invocation to the next.
+
+### Why Use An Environment Variable
+
+An environment variable is enough for this tutorial step because we only need a runtime switch:
+
+```bash
+USE_LANGGRAPH_RUNTIME=1 python main.py
+```
+
+Later, a product system might use configuration files, feature flags, or deployment settings.
+
+### How To Run Or Test
+
+Run the default manual CLI:
+
+```bash
+cd agent-python
+OPENAI_API_KEY= python main.py
+```
+
+Run the graph CLI:
+
+```bash
+cd agent-python
+OPENAI_API_KEY= USE_LANGGRAPH_RUNTIME=1 python main.py
+```
+
+Try this graph-mode flow:
+
+```text
+create a task for tomorrow
+Buy milk
+no
+```
+
+Expected behavior:
+
+```text
+The Agent asks for title.
+The Agent asks for confirmation.
+The Agent cancels without changing data.
+```
+
+Also run syntax checks:
+
+```bash
+python -m py_compile main.py graph_runtime.py
+```
+
+### What You Learned
+
+You learned how to introduce LangGraph as an opt-in runtime path before making it the default.
+
+This is the safe bridge between tutorial code and product-style migration.
+
+### Next Step
+
+Next, we can review Phase 7 and decide whether to switch the graph runtime to default or keep it behind the flag while adding checkpointing.
