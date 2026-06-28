@@ -23,7 +23,7 @@ docs/           Learning notes, diagrams, and phase-by-phase explanations.
 
 ## Current Learning Milestone
 
-Phase 6 focuses on improving Agent intelligence while preserving enterprise boundaries:
+Phase 7 focuses on productizing the Agent workflow while preserving enterprise boundaries:
 
 ```text
 Backend Java:
@@ -33,7 +33,7 @@ MCP Server:
   exposes selected backend capabilities as Agent tools
 
 Python Agent:
-  interprets user intent, normalizes dates, asks follow-up questions, and enforces confirmation
+  owns orchestration, safety policy, follow-up questions, confirmation, and optional LangGraph routing
 ```
 
 Examples now supported include:
@@ -46,7 +46,7 @@ tasks due by Friday
 create a task for tomorrow
 ```
 
-The key lesson is that the Agent becomes smarter without taking ownership of backend data or business rules.
+The key lesson is that LangGraph organizes Agent workflow state and routing; it does not replace the backend, MCP tools, or Agent safety policy.
 
 ## Phase 0 Environment
 

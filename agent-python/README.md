@@ -181,7 +181,7 @@ Pending state now uses typed dataclasses: `PendingAction` for write confirmation
 
 Pending state kinds now use enums: `PendingActionKind` and `PendingFollowUpKind`. MCP tool names remain strings because they are external tool contract names; the enums are only for internal Agent workflow state.
 
-The runtime is now graph-shaped: `AgentState` acts like graph state, `handle_agent_message` acts like an intent/tool-decision node, `handle_pending_follow_up` acts like a follow-up node, and `handle_pending_action` acts like a confirmation node. LangGraph has not been added yet; this manual structure prepares for it.
+The runtime is now graph-shaped and LangGraph is available as an opt-in path. Manual runtime remains the default; set `USE_LANGGRAPH_RUNTIME=1` to route normal task messages through LangGraph.
 
 The `ask-llm` command returns a JSON decision. The Agent can execute read-only decisions such as `list_tasks` and `get_task`. Write decisions such as `create_task` and `complete_task` become pending confirmation actions before execution.
 

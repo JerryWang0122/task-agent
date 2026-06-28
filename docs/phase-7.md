@@ -1628,3 +1628,219 @@ This is the safe bridge between tutorial code and product-style migration.
 ### Next Step
 
 Next, we can review Phase 7 and decide whether to switch the graph runtime to default or keep it behind the flag while adding checkpointing.
+
+## Step 7.12: Phase 7 Review And Runtime Decision
+
+### Goal
+
+Step 7.12 closes Phase 7.
+
+This step reviews what changed and makes a runtime decision for the next phase.
+
+Phase 7 started with a CLI that had many teaching paths and ended with two usable runtimes:
+
+```text
+manual runtime
+  default path
+
+LangGraph runtime
+  opt-in path using USE_LANGGRAPH_RUNTIME=1
+```
+
+### Files We Touched
+
+- `docs/phase-7.md`: adds the Phase 7 review and runtime decision.
+- `README.md`: updates the current learning milestone from Phase 6 to Phase 7.
+- `agent-python/README.md`: updates the Agent runtime summary.
+
+### What Phase 7 Built
+
+Phase 7 added these Agent runtime concepts:
+
+```text
+one normal natural-language entrypoint
+explicit AgentState
+pending workflow handlers
+AgentTurnResult
+typed PendingAction and PendingFollowUp
+PendingActionKind and PendingFollowUpKind enums
+LangGraph concept mapping
+minimal LangGraph skeleton
+normal-message graph node
+conditional graph routing
+opt-in graph CLI runtime
+```
+
+### Current Runtime Decision
+
+The current decision is:
+
+```text
+Keep manual runtime as default.
+Keep LangGraph runtime behind USE_LANGGRAPH_RUNTIME=1.
+Do not switch graph runtime to default yet.
+```
+
+This is intentional.
+
+The graph runtime now works for the core follow-up and confirmation flow, but it still stores state in memory. It does not yet provide durable checkpointing or persisted resume behavior.
+
+### Why Not Switch Graph Runtime To Default Yet
+
+Switching the default now would be premature because the main product value of LangGraph is not just routing.
+
+The bigger value is:
+
+```text
+checkpointing
+resume after interruption
+clear node-level observability
+explicit retry/error paths
+human-in-the-loop state management
+```
+
+We have only started using routing.
+
+So the safer architecture is:
+
+```text
+manual runtime remains stable
+graph runtime remains opt-in
+next phase adds checkpointing / persistence learning
+then decide whether graph becomes default
+```
+
+### What Is Now Product-Relevant
+
+These patterns are worth keeping:
+
+```text
+normal users should not choose internal routing paths
+write actions require confirmation
+missing information triggers follow-up questions
+workflow state must be explicit
+state transition results should have named fields
+internal workflow kinds should use typed values
+new orchestration runtimes should be introduced behind a flag first
+```
+
+### What Is Still Tutorial Scaffolding
+
+These pieces are still teaching aids:
+
+```text
+ask-llm
+ask-tools
+openai-tools
+manual rule-based fallback commands
+stdout TOOL_CALL logs
+in-memory graph state dictionary
+USE_LANGGRAPH_RUNTIME as a simple environment switch
+```
+
+They are useful for learning, but a production version would consolidate and harden them.
+
+### Architecture At The End Of Phase 7
+
+The architecture now looks like this:
+
+```text
+User
+  -> Python Agent CLI
+  -> manual runtime by default
+  -> optional LangGraph runtime
+  -> MCP Client
+  -> MCP Server tools
+  -> Java Spring Boot Task API
+  -> H2 database
+```
+
+The responsibility boundaries remain the same:
+
+```text
+Java backend owns business rules.
+MCP exposes selected backend capabilities as tools.
+Python Agent owns orchestration, safety policy, follow-up, and confirmation.
+LangGraph organizes Agent workflow state and routing.
+```
+
+### Recommended Next Phase
+
+The recommended next phase is:
+
+```text
+Phase 8: Durable Workflow State And Checkpointing
+```
+
+Suggested Step 8.1:
+
+```text
+Make graph state serializable.
+```
+
+Why this first?
+
+Because the current graph state contains dataclass and enum objects directly:
+
+```text
+PendingAction
+PendingFollowUp
+PendingActionKind
+PendingFollowUpKind
+```
+
+That is fine for in-memory learning, but durable checkpointing needs state that can be serialized safely.
+
+### How To Verify Phase 7
+
+Run syntax checks:
+
+```bash
+cd agent-python
+python -m py_compile main.py graph_runtime.py
+```
+
+Run manual runtime:
+
+```bash
+OPENAI_API_KEY= python main.py
+```
+
+Run graph runtime:
+
+```bash
+OPENAI_API_KEY= USE_LANGGRAPH_RUNTIME=1 python main.py
+```
+
+Try this in both modes:
+
+```text
+create a task for tomorrow
+Buy milk
+no
+exit
+```
+
+Expected behavior:
+
+```text
+The Agent asks for the title.
+The Agent asks for confirmation.
+The Agent cancels without changing data.
+```
+
+### What You Learned
+
+You learned how an Agent runtime evolves:
+
+```text
+simple CLI conditions
+  -> explicit state
+  -> typed state
+  -> graph-shaped handlers
+  -> LangGraph nodes
+  -> conditional graph routing
+  -> opt-in graph runtime
+```
+
+The main lesson is that LangGraph should organize a workflow you already understand. It should not replace understanding the workflow.
