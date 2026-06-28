@@ -183,6 +183,8 @@ Pending state kinds now use enums: `PendingActionKind` and `PendingFollowUpKind`
 
 The runtime is now graph-shaped and LangGraph is available as an opt-in path. Manual runtime remains the default; set `USE_LANGGRAPH_RUNTIME=1` to route normal task messages through LangGraph.
 
+The graph runtime stores pending workflow state as serializable dictionaries instead of live dataclass objects. The Agent still uses typed objects internally, but the graph boundary converts them into checkpoint-friendly state.
+
 The `ask-llm` command returns a JSON decision. The Agent can execute read-only decisions such as `list_tasks` and `get_task`. Write decisions such as `create_task` and `complete_task` become pending confirmation actions before execution.
 
 The `openai-tools` command shows how MCP tool metadata can be converted into OpenAI tool definitions. This is the bridge toward automatic OpenAI tool calling.

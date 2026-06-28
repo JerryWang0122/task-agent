@@ -23,7 +23,7 @@ docs/           Learning notes, diagrams, and phase-by-phase explanations.
 
 ## Current Learning Milestone
 
-Phase 7 focuses on productizing the Agent workflow while preserving enterprise boundaries:
+Phase 8 focuses on making Agent workflow state durable while preserving enterprise boundaries:
 
 ```text
 Backend Java:
@@ -33,7 +33,7 @@ MCP Server:
   exposes selected backend capabilities as Agent tools
 
 Python Agent:
-  owns orchestration, safety policy, follow-up questions, confirmation, and optional LangGraph routing
+  owns orchestration, safety policy, follow-up questions, confirmation, and checkpoint-friendly graph state
 ```
 
 Examples now supported include:
@@ -46,7 +46,7 @@ tasks due by Friday
 create a task for tomorrow
 ```
 
-The key lesson is that LangGraph organizes Agent workflow state and routing; it does not replace the backend, MCP tools, or Agent safety policy.
+The key lesson is that durable Agent workflows need serializable state before checkpointing and resume can work safely.
 
 ## Phase 0 Environment
 
