@@ -224,6 +224,23 @@ def format_checkpoint_values(compiled_graph: object, thread_id: str) -> str:
     return json.dumps(values, indent=2, sort_keys=True)
 
 
+def runtime_context(thread_id: str) -> dict[str, object]:
+    """Describe the durable graph runtime context for tutorial inspection."""
+    db_path = checkpoint_db_path()
+    return {
+        "runtime": "langgraph",
+        "checkpointer": "sqlite",
+        "thread_id": thread_id,
+        "checkpoint_db": str(db_path),
+        "checkpoint_db_exists": db_path.exists(),
+    }
+
+
+def format_runtime_context(thread_id: str) -> str:
+    """Format durable graph runtime context for the CLI."""
+    return json.dumps(runtime_context(thread_id), indent=2, sort_keys=True)
+
+
 if __name__ == "__main__":
     compiled_graph = build_checkpointed_graph()
     config = graph_config(DEFAULT_THREAD_ID)

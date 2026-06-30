@@ -495,3 +495,134 @@ You learned the difference between process-local checkpointing and durable check
 ### Next Step
 
 Next, we can add a clearer CLI command to show which checkpoint database and thread are active, or review whether graph runtime is ready to become the default.
+
+## Step 8.5: Show Runtime Context
+
+### Goal
+
+Make the active Agent runtime settings visible.
+
+After adding SQLite checkpointing, three values control resume behavior:
+
+```text
+USE_LANGGRAPH_RUNTIME
+AGENT_THREAD_ID
+AGENT_CHECKPOINT_DB
+```
+
+If those values are unclear, checkpoint behavior is hard to reason about. Step 8.5 adds a small `runtime` command so we can inspect them directly from the CLI.
+
+### Files We Touched
+
+- `agent-python/graph_runtime.py`: adds runtime context formatting helpers.
+- `agent-python/main.py`: adds the `runtime` CLI command.
+- `agent-python/README.md`: documents the new command.
+- `docs/phase-8.md`: explains why runtime context matters.
+
+### Concept
+
+Checkpoint resume depends on two identities:
+
+```text
+checkpoint_db
+  where workflow state is stored
+
+thread_id
+  which workflow inside that database should be resumed
+```
+
+This means two runs only resume the same workflow if both values match:
+
+```text
+same checkpoint_db + same thread_id
+  -> resumes the same workflow
+
+same checkpoint_db + different thread_id
+  -> different workflow
+
+different checkpoint_db + same thread_id
+  -> different storage, so no resume
+```
+
+### Implementation
+
+The graph runtime now provides:
+
+```text
+runtime_context(thread_id)
+format_runtime_context(thread_id)
+```
+
+The CLI now supports:
+
+```text
+runtime
+```
+
+In manual runtime mode, it prints:
+
+```json
+{
+  "langgraph_enabled": false,
+  "runtime": "manual"
+}
+```
+
+In graph runtime mode, it prints:
+
+```json
+{
+  "checkpoint_db": ".../agent-python/.agent-state/checkpoints.sqlite",
+  "checkpoint_db_exists": true,
+  "checkpointer": "sqlite",
+  "runtime": "langgraph",
+  "thread_id": "demo-1"
+}
+```
+
+### How To Run Or Test
+
+Manual runtime:
+
+```bash
+cd agent-python
+OPENAI_API_KEY= .venv/bin/python main.py
+```
+
+Try:
+
+```text
+runtime
+exit
+```
+
+Graph runtime:
+
+```bash
+OPENAI_API_KEY= USE_LANGGRAPH_RUNTIME=1 AGENT_THREAD_ID=demo-runtime .venv/bin/python main.py
+```
+
+Try:
+
+```text
+runtime
+checkpoint
+exit
+```
+
+Expected result:
+
+```text
+runtime shows the active checkpoint database and thread id.
+checkpoint shows whether that thread already has saved workflow state.
+```
+
+### What You Learned
+
+You learned that durable workflow resume needs both storage identity and workflow identity.
+
+`AGENT_CHECKPOINT_DB` selects the storage. `AGENT_THREAD_ID` selects the workflow inside that storage.
+
+### Next Step
+
+Next, we can review whether the graph runtime is now ready to become the default, or keep it opt-in while we clean up tutorial-only commands.
