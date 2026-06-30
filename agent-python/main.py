@@ -1031,7 +1031,7 @@ def main() -> None:
     print("Personal Task Agent")
     print(
         "Type a task request, 'tools', 'openai-tools', 'ask-llm <message>', "
-        "'ask-tools <message>', or 'exit' to quit."
+        "'ask-tools <message>', 'checkpoint', or 'exit' to quit."
     )
     if USE_LANGGRAPH_RUNTIME:
         print(f"LangGraph runtime is enabled for normal task messages. Thread: {AGENT_THREAD_ID}")
@@ -1064,6 +1064,21 @@ def main() -> None:
 
         if normalized_message == "openai-tools":
             print(asyncio.run(list_openai_tools()))
+            continue
+
+        if normalized_message == "checkpoint":
+            if not USE_LANGGRAPH_RUNTIME:
+                print("Checkpoint inspection is only available when USE_LANGGRAPH_RUNTIME=1.")
+                continue
+
+            if compiled_graph is None:
+                from graph_runtime import build_checkpointed_graph
+
+                compiled_graph = build_checkpointed_graph()
+
+            from graph_runtime import format_checkpoint_values
+
+            print(format_checkpoint_values(compiled_graph, AGENT_THREAD_ID))
             continue
 
         if normalized_message.startswith("ask-llm "):

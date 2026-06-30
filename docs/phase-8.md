@@ -251,3 +251,129 @@ Step 8.1 made state safe to save. Step 8.2 actually saves and resumes that state
 ### Next Step
 
 Next, we can inspect checkpoint state more explicitly or move from in-memory checkpointing toward durable checkpoint storage.
+
+## Step 8.3: Inspect Checkpoint State
+
+### Goal
+
+Make checkpointing visible.
+
+Step 8.2 proved that LangGraph can resume state by `thread_id`, but that can still feel hidden. Step 8.3 adds a small inspection path so we can see exactly what the checkpointer saved.
+
+### Files We Touched
+
+- `agent-python/graph_runtime.py`: adds helper functions that read the latest checkpoint values for one thread.
+- `agent-python/main.py`: adds a `checkpoint` debug command for the opt-in graph runtime.
+- `docs/phase-8.md`: documents how to inspect checkpoint state.
+
+### Concept
+
+LangGraph exposes saved workflow state through:
+
+```text
+compiled_graph.get_state(config)
+```
+
+That returns a `StateSnapshot`. The most important field for us is:
+
+```text
+snapshot.values
+```
+
+Those values are the latest saved workflow state for the selected `thread_id`.
+
+This proves that checkpointing is not just remembering the last answer. It remembers the state that controls the next route.
+
+### Implementation
+
+The graph runtime now provides:
+
+```text
+checkpoint_values(compiled_graph, thread_id)
+format_checkpoint_values(compiled_graph, thread_id)
+```
+
+The CLI now supports this command when graph runtime is enabled:
+
+```text
+checkpoint
+```
+
+### How To Run Or Test
+
+Run the graph CLI:
+
+```bash
+cd agent-python
+OPENAI_API_KEY= USE_LANGGRAPH_RUNTIME=1 AGENT_THREAD_ID=demo-inspect .venv/bin/python main.py
+```
+
+Try:
+
+```text
+checkpoint
+create a task for tomorrow
+checkpoint
+Buy milk
+checkpoint
+no
+checkpoint
+exit
+```
+
+Expected result after the first `checkpoint`:
+
+```text
+No checkpoint state found for thread 'demo-inspect'.
+```
+
+Expected result after `create a task for tomorrow`:
+
+```json
+{
+  "pending_action": null,
+  "pending_follow_up": {
+    "due_date": "2026-06-29",
+    "kind": "create_task_missing_title"
+  },
+  "response": "What is the task title? I will set the due date to 2026-06-29.",
+  "user_message": "create a task for tomorrow"
+}
+```
+
+Expected result after `Buy milk`:
+
+```json
+{
+  "pending_action": {
+    "due_date": "2026-06-29",
+    "kind": "create_task",
+    "task_id": null,
+    "title": "Buy milk"
+  },
+  "pending_follow_up": null,
+  "response": "Confirm: create task 'Buy milk' due 2026-06-29? Type 'yes' or 'no'.",
+  "user_message": "Buy milk"
+}
+```
+
+Expected result after `no`:
+
+```json
+{
+  "pending_action": null,
+  "pending_follow_up": null,
+  "response": "Cancelled. No task was changed.",
+  "user_message": "no"
+}
+```
+
+### What You Learned
+
+You learned how to inspect the state that makes workflow resume possible.
+
+The `thread_id` selects the workflow. The checkpoint stores the latest state. The graph uses that state to decide which node should handle the next user message.
+
+### Next Step
+
+Next, we can decide whether to keep using `MemorySaver` for learning or introduce a durable checkpointer that survives process restarts.

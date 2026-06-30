@@ -1,4 +1,5 @@
 import asyncio
+import json
 from typing import TypedDict
 
 from langgraph.checkpoint.memory import MemorySaver
@@ -188,12 +189,29 @@ def build_checkpointed_graph():
     return build_graph(checkpointer=MemorySaver())
 
 
+def checkpoint_values(compiled_graph: object, thread_id: str) -> dict[str, object]:
+    """Return the latest saved values for one workflow thread."""
+    snapshot = compiled_graph.get_state(graph_config(thread_id))
+    return dict(snapshot.values)
+
+
+def format_checkpoint_values(compiled_graph: object, thread_id: str) -> str:
+    """Format checkpoint state for tutorial inspection in the CLI."""
+    values = checkpoint_values(compiled_graph, thread_id)
+    if not values:
+        return f"No checkpoint state found for thread '{thread_id}'."
+
+    return json.dumps(values, indent=2, sort_keys=True)
+
+
 if __name__ == "__main__":
     compiled_graph = build_checkpointed_graph()
     config = graph_config(DEFAULT_THREAD_ID)
 
     first_result = compiled_graph.invoke({"user_message": "create a task for tomorrow"}, config=config)
     print(first_result["response"])
+    print(format_checkpoint_values(compiled_graph, DEFAULT_THREAD_ID))
 
     second_result = compiled_graph.invoke({"user_message": "Buy milk"}, config=config)
     print(second_result["response"])
+    print(format_checkpoint_values(compiled_graph, DEFAULT_THREAD_ID))
