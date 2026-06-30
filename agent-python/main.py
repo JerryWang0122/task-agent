@@ -1072,9 +1072,9 @@ def main() -> None:
                 continue
 
             if compiled_graph is None:
-                from graph_runtime import build_checkpointed_graph
+                from graph_runtime import build_durable_checkpointed_graph
 
-                compiled_graph = build_checkpointed_graph()
+                compiled_graph = build_durable_checkpointed_graph()
 
             from graph_runtime import format_checkpoint_values
 
@@ -1113,9 +1113,9 @@ def main() -> None:
 
         if USE_LANGGRAPH_RUNTIME:
             if compiled_graph is None:
-                from graph_runtime import build_checkpointed_graph
+                from graph_runtime import build_durable_checkpointed_graph
 
-                compiled_graph = build_checkpointed_graph()
+                compiled_graph = build_durable_checkpointed_graph()
 
             print(run_graph_turn(compiled_graph, AGENT_THREAD_ID, user_message))
             continue

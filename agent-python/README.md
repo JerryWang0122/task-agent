@@ -185,7 +185,7 @@ The runtime is now graph-shaped and LangGraph is available as an opt-in path. Ma
 
 The graph runtime stores pending workflow state as serializable dictionaries instead of live dataclass objects. The Agent still uses typed objects internally, but the graph boundary converts them into checkpoint-friendly state.
 
-The opt-in graph runtime now uses a LangGraph in-memory checkpointer. Set `AGENT_THREAD_ID` to choose the workflow thread used for checkpoint resume inside the current Python process. Use the `checkpoint` command in graph mode to inspect the latest saved state for that thread.
+The opt-in graph runtime now uses a LangGraph SQLite checkpointer. Set `AGENT_THREAD_ID` to choose the workflow thread used for checkpoint resume. Use the `checkpoint` command in graph mode to inspect the latest saved state for that thread. By default, local checkpoint data is stored in `agent-python/.agent-state/checkpoints.sqlite`; override it with `AGENT_CHECKPOINT_DB`.
 
 The `ask-llm` command returns a JSON decision. The Agent can execute read-only decisions such as `list_tasks` and `get_task`. Write decisions such as `create_task` and `complete_task` become pending confirmation actions before execution.
 

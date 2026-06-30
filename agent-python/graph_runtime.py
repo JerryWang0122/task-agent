@@ -1,8 +1,12 @@
 import asyncio
 import json
+import os
+import sqlite3
+from pathlib import Path
 from typing import TypedDict
 
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, StateGraph
 
 from main import (
@@ -19,6 +23,7 @@ from main import (
 
 SerializedPendingState = dict[str, object]
 DEFAULT_THREAD_ID = "demo-thread"
+DEFAULT_CHECKPOINT_DB_PATH = Path(__file__).resolve().parent / ".agent-state" / "checkpoints.sqlite"
 
 
 class GraphAgentState(TypedDict, total=False):
@@ -187,6 +192,21 @@ def build_graph(checkpointer: object | None = None):
 def build_checkpointed_graph():
     """Build the graph with an in-memory checkpointer for one Python process."""
     return build_graph(checkpointer=MemorySaver())
+
+
+def checkpoint_db_path() -> Path:
+    """Return the SQLite checkpoint path used by the graph runtime."""
+    return Path(os.getenv("AGENT_CHECKPOINT_DB", str(DEFAULT_CHECKPOINT_DB_PATH)))
+
+
+def build_durable_checkpointed_graph(db_path: Path | None = None):
+    """Build the graph with a SQLite checkpointer that survives process restarts."""
+    resolved_db_path = db_path or checkpoint_db_path()
+    resolved_db_path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(resolved_db_path, check_same_thread=False)
+    checkpointer = SqliteSaver(connection)
+    checkpointer.setup()
+    return build_graph(checkpointer=checkpointer)
 
 
 def checkpoint_values(compiled_graph: object, thread_id: str) -> dict[str, object]:

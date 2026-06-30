@@ -377,3 +377,121 @@ The `thread_id` selects the workflow. The checkpoint stores the latest state. Th
 ### Next Step
 
 Next, we can decide whether to keep using `MemorySaver` for learning or introduce a durable checkpointer that survives process restarts.
+
+## Step 8.4: Add SQLite Durable Checkpointer
+
+### Goal
+
+Move from in-memory checkpointing to durable checkpointing.
+
+Step 8.2 used `MemorySaver`, which proved the `thread_id` concept but lost state when the Python process exited. Step 8.4 adds a SQLite checkpointer so the graph runtime can resume workflow state across process restarts.
+
+### Files We Touched
+
+- `agent-python/pyproject.toml`: adds `langgraph-checkpoint-sqlite`.
+- `.gitignore`: ignores local `.agent-state/` checkpoint files.
+- `agent-python/graph_runtime.py`: adds SQLite checkpoint database support.
+- `agent-python/main.py`: changes graph CLI runtime to use the durable SQLite checkpointer.
+- `docs/phase-8.md`: explains durable checkpointing.
+
+### Concept
+
+There are now two checkpointing modes:
+
+```text
+MemorySaver
+  useful for learning checkpoint behavior inside one Python process
+  state disappears when the process exits
+
+SqliteSaver
+  stores checkpoints in a local SQLite database
+  state can survive process restarts
+```
+
+The important idea is still the same:
+
+```text
+thread_id selects the workflow
+checkpointer stores the latest workflow state
+graph uses that state to route the next message
+```
+
+### Implementation
+
+The graph runtime now provides:
+
+```text
+checkpoint_db_path()
+build_durable_checkpointed_graph()
+```
+
+By default, SQLite checkpoints are stored under:
+
+```text
+agent-python/.agent-state/checkpoints.sqlite
+```
+
+You can override the database path with:
+
+```bash
+AGENT_CHECKPOINT_DB=/path/to/checkpoints.sqlite
+```
+
+The graph CLI now uses `build_durable_checkpointed_graph()` when `USE_LANGGRAPH_RUNTIME=1`.
+
+### How To Run Or Test
+
+Install the updated Agent package:
+
+```bash
+cd agent-python
+.venv/bin/python -m pip install -e .
+```
+
+Run the first process:
+
+```bash
+OPENAI_API_KEY= USE_LANGGRAPH_RUNTIME=1 AGENT_THREAD_ID=resume-demo .venv/bin/python main.py
+```
+
+Type:
+
+```text
+create a task for tomorrow
+exit
+```
+
+Start a second process with the same thread:
+
+```bash
+OPENAI_API_KEY= USE_LANGGRAPH_RUNTIME=1 AGENT_THREAD_ID=resume-demo .venv/bin/python main.py
+```
+
+Type:
+
+```text
+checkpoint
+Buy milk
+checkpoint
+no
+exit
+```
+
+Expected behavior:
+
+```text
+The second process sees the pending follow-up from the first process.
+Buy milk is treated as the missing task title.
+The Agent asks for confirmation.
+no cancels the pending action.
+```
+
+### What You Learned
+
+You learned the difference between process-local checkpointing and durable checkpointing.
+
+`MemorySaver` teaches the concept. `SqliteSaver` makes the concept survive a process restart.
+
+### Next Step
+
+Next, we can add a clearer CLI command to show which checkpoint database and thread are active, or review whether graph runtime is ready to become the default.
